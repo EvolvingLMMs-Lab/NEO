@@ -28,7 +28,7 @@
 
 - 🔥 **Superior Efficiency:** With merely 390M image-text examples, NEO develops strong visual perception from scratch, rivaling top-tier modular VLMs and outperforming native ones.  
 
-- 🔥 **Promising Roadmap:** NEO pioneers a promsing route for scalable and powerful native VLMs, paired with diverse reusable components that foster a cost-effective and extensible ecosystem.
+- 🔥 **Promising Roadmap:** NEO pioneers a promising route for scalable and powerful native VLMs, paired with diverse reusable components that foster a cost-effective and extensible ecosystem.
 
 ## 🤖 Model Zoo
 
