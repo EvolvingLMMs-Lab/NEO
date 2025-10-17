@@ -1,14 +1,14 @@
 # <img src="docs/NEO_logo.jpg" style="vertical-align: -10px;" :height="40px" width="40px"> NEO Series: Native Vision-Language Models
 
 <p align="center">
-  <img src="docs/NEO_architecture.jpg" width="90%">
+  <img src="docs/NEO_architecture.jpg" width="80%">
 </p>
 
-- **2025/09**: [From Pixels to Words -- Towards Native Vision-Language Primitives at Scale](http://xxxx) (arXiv 2025)
+- **2025/09**: [From Pixels to Words -- Towards Native Vision-Language Primitives at Scale](https://arxiv.org/abs/2510.14979) (arXiv 2025)
 
 
 ## 📜 News   
-[2025/10] The [paper](https://xxxx), [weights](https://huggingface.co/collections/Paranioar/neo1-0-68f0db9cbac952be3eca7089), and [test code](https://github.com/EvolvingLMMs-Lab/NEO/blob/main/VLMEvalKit/README.md) of **NEO** are released !     
+[2025/10] The [paper](https://arxiv.org/abs/2510.14979), [weights](https://huggingface.co/collections/Paranioar/neo1-0-68f0db9cbac952be3eca7089), and [test code](https://github.com/EvolvingLMMs-Lab/NEO/blob/main/VLMEvalKit/README.md) of **NEO** are released !     
 [2025/09] 💥💥💥 **NEO** has been completed !  
 
 
@@ -98,11 +98,11 @@ We release 2B and 9B **NEO** in Pre-Training (PT), Mid-Training (MT), and Superv
 ## ✒️ Citation 
 If **NEO series** is helpful for your research, please consider **star** ⭐ and **citation** 📝 :
 ```bibtex
-@article{diao2025NEO,
-  title={From Pixels to Words -- Towards Native Vision-Language Primitives at Scale},
-  author={xxxx},
-  journal={xxxx},
-  year={2025}
+@article{Diao2025NEO,
+  title        = {From Pixels to Words — Towards Native Vision-Language Primitives at Scale},
+  author       = {Diao, Haiwen and Li, Mingxuan and Wu, Silei and Dai, Linjun and Wang, Xiaohua and Deng, Hanming and Lu, Lewei and Lin, Dahua and Liu, Ziwei},
+  journal      = {arXiv preprint arXiv:2510.14979},
+  year         = {2025}
 }
 ```
 
