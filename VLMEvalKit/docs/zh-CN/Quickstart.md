@@ -11,7 +11,8 @@ git clone https://github.com/EvolvingLMMs-Lab/NEO.git
 cd NEO/VLMEvalKit
 conda create -n vlm_eval pip python=3.10
 conda activate vlm_eval
-pip install -e .
+pip install -e .  
+pip install transformers==4.57.1 [option <= 4.57.1]
 ```
 
 **设置密钥**
