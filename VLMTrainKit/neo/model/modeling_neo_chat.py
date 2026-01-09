@@ -14,12 +14,9 @@ from .modeling_neo_qwen3 import Qwen3ForCausalLM
 from .modeling_neo_vit import NEOVisionModel
 
 try:
-    from torch.nn.attention.flex_attention import (
-        _mask_mod_signature,
-        and_masks,
-        create_block_mask,
-        or_masks,
-    )
+    from torch.nn.attention.flex_attention import (_mask_mod_signature,
+                                                   and_masks,
+                                                   create_block_mask, or_masks)
 except ImportError:
     print("To enable flexattention, please install torch>=2.5.0")
 
@@ -229,7 +226,7 @@ class NEOChatModel(PreTrainedModel):
                     dtype=self.dtype,
                 )
             ]
-            grid_hw = [torch.tensor([[grid_size, grid_size]], device=self.device)]
+            grid_hw = torch.tensor([[grid_size, grid_size]], device=self.device)
         else:
             grid_hw = image_grid_hw[0]
 

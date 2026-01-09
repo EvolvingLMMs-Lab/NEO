@@ -1,19 +1,25 @@
-# NEO Series: Native Vision-Language Models
+# 🚀 NEO Series: Native Vision-Language Models
 
-This repository provides a training framework for NEO models. The are two steps to use our code:
+Welcome to the **NEO Training Framework** - a comprehensive toolkit for training state-of-the-art vision-language models.
 
-Customize your dataset: prepare data, implement the config
-Modify training scripts:
+## 📋 Quick Start Guide
 
-## Contents
-- [Install](#install)
-- [Repository Structure](#repository-structure)
-- [Custom Dataset Configuration](#custom-dataset-configuration)
-- [Usage](#usage)
+To use this framework, follow these two essential steps:
 
-## Install
+1. **📁 Customize Your Dataset**: Prepare your data and implement the configuration
+2. **⚙️ Modify Training Scripts**: Adjust parameters to match your training requirements
 
-#### Environment
+## 📑 Contents
+- [🔧 Installation](#-installation)
+- [📂 Repository Structure](#-repository-structure)
+- [📊 Custom Dataset Configuration](#-custom-dataset-configuration)
+- [🎯 Usage](#-usage)
+
+---
+
+## 🔧 Installation
+
+### Environment Setup
 
 ```bash
 git clone https://github.com/EvolvingLMMs-Lab/NEO.git
@@ -25,39 +31,49 @@ pip install --upgrade pip
 pip install .
 ```
 
-#### Preparation    
+### Model Preparation
 
-[NOTE]: Download `Qwen3 Model`:
-- [Qwen3-1.7B-Base](https://huggingface.co/Qwen/Qwen3-1.7B-Base)
-- [Qwen3-8B-Base](https://huggingface.co/Qwen/Qwen3-8B-Base). 
+> **📌 Note**: Download the required Qwen3 base models:
 
+| Model | Link |
+|-------|------|
+| Qwen3-1.7B-Base | [🤗 Hugging Face](https://huggingface.co/Qwen/Qwen3-1.7B-Base) |
+| Qwen3-8B-Base | [🤗 Hugging Face](https://huggingface.co/Qwen/Qwen3-8B-Base) |
 
-## Repository Structure
+---
 
-### `neo/train/`
+## 📂 Repository Structure
 
-- `trainer.py`: Main trainer updated from Huggingface Trainer
-- `argument.py`: Dataclasses for model, data and training arguments
+### 🏋️ `neo/train/`
+Training-related modules:
+- **`trainer.py`**: Main trainer (extended from HuggingFace Trainer)
+- **`argument.py`**: Dataclasses for model, data, and training arguments
 
-### `neo/data/`
+### 📊 `neo/data/`
+Data processing modules:
+- **`__init__.py`**: Dataset configuration registry
+- **`data_processor.py`**: Data processing pipeline for NEO models
 
-- `__init__.py`: Contains datasets configs
-- `data_processor.py`: Data processing module for NEO models
+---
 
-## Custom Dataset Configuration
+## 📊 Custom Dataset Configuration
 
-The customized data should have the format like:
+### 📝 JSON Data Structure
 
-### JSON Data Structure
+Your dataset should follow this structure:
 
-**Media Specification**:
+#### **Required Fields**:
 
-- `image`: Contains path to the media file (required)
-- Media tags in prompts:
-  - `<image>` for image understanding tasks
-- `conversations`: contains the questions and answers
+| Field | Description | Required |
+|-------|-------------|----------|
+| `image` | Path to the media file | ✅ Yes |
+| `conversations` | List of question-answer pairs | ✅ Yes |
 
-### Example Instances:
+#### **Media Tags**:
+- Use `<image>` tag in prompts for image understanding tasks
+- Each tag must correspond to exactly one media file
+
+### 💡 Example Instances:
 
 **Single Image Example**:
 ```json
@@ -110,10 +126,13 @@ The customized data should have the format like:
 ]
 ```
 
-### Dataset config for training
-### Dataset Definition Structure
+---
 
-1. **Create a dataset dictionary** in the format in the file `data/__init__.py`:
+### ⚙️ Dataset Configuration for Training
+
+#### Step 1: Define Your Dataset
+
+Create a dataset dictionary in [`neo/data/__init__.py`](neo/data/__init__.py):
 ```python
 DATASET_NAME = {
     "annotation_path": "/path/to/annotations.json",
@@ -121,7 +140,9 @@ DATASET_NAME = {
 }
 ```
 
-2. **Register your dataset** by adding it to the `data_dict`:
+#### Step 2: Register Your Dataset
+
+Add your dataset to the `data_dict`:
 ```python
 data_dict = {
     "your_dataset_name": DATASET_NAME,
@@ -129,32 +150,69 @@ data_dict = {
 }
 ```
 
-### Sampling Rate Control
+#### Step 3: Configure Sampling Rate (Optional)
 
-You can optionally specify sampling rates by appending `%X` to the dataset name:
-- `"dataset_name%50"` will sample 50% of the data
-- `"dataset_name%20"` will sample 20% of the data
+Control the amount of data used by appending `%X` to the dataset name:
 
+| Syntax | Effect |
+|--------|--------|
+| `"dataset_name%50"` | Use 50% of the data |
+| `"dataset_name%20"` | Use 20% of the data |
+| `"dataset_name"` | Use 100% of the data (default) |
 
-2. Use it in training:
+**Usage Example**:
 ```python
 dataset_names = ["my_dataset%50"]  # Will use 50% of your dataset
 configs = data_list(dataset_names)
 ```
 
-### Notes  
-- The `annotation_path` should point to a JSON or JSONL file containing your dataset annotations.  
-- The `data_path` can be left empty if the image paths in the annotations are absolute.  
-- Sampling rates are applied per-dataset when multiple datasets are specified.  
-- The training data should strictly follow this format:  
-  - One `<image>` tag in the question must correspond to exactly one image file  
-  - Similarly, `<video>` tags must correspond to video files  
+### 📌 Important Notes
 
+- ✅ **Annotation Path**: Must point to a JSON or JSONL file with dataset annotations
+- ✅ **Data Path**: Can be empty if image paths in annotations are absolute
+- ✅ **Sampling Rates**: Applied per-dataset when using multiple datasets
+- ✅ **Format Compliance**:
+  - Each `<image>` tag must correspond to exactly one image file
+  - Each `<video>` tag must correspond to exactly one video file
 
+---
 
-## Usage
+## 🎯 Usage
 
-To train a model:
+### 💾 Packed Data Training for Memory Efficiency
+
+NEO adopts a **packed data training strategy** to maximize GPU memory utilization. This approach concatenates multiple samples into a single sequence, significantly improving training efficiency.
+
+#### ⚡ Key Considerations:
+
+| Aspect | Description |
+|--------|-------------|
+| **Flexible Batch Size** | Can be set to any value, but must align with dataset characteristics |
+| **Length Control** | Total packed length must not exceed `max_seq_length` |
+| **Global Batch Size** | Total samples processed across all GPUs in one optimizer step |
+
+#### 📐 Configuration Guidelines:
+
+1. **Monitor** your dataset's average sample length
+2. **Calculate** safe batch size: `batch_size × average_sample_length ≤ max_seq_length`
+3. **Adjust** based on GPU memory capacity and model size
+
+#### 💡 Example Calculation:
+
+```
+Given:
+  - max_seq_length = 18,432
+  - average_sample_length ≈ 3,000 tokens
+
+Recommended:
+  - batch_size = 6 (safe: 6 × 3,000 = 18,000 < 18,432)
+
+⚠️  If samples vary greatly in length, reduce batch_size to prevent overflow.
+```
+
+---
+
+### 🔧 Training Script Configuration
 
 ```bash
 #!/bin/bash
@@ -185,6 +243,8 @@ tokenizer=""  # 📝 Path to the tokenizer
 lr=2e-4
 
 # 💥💥💥 Global Batch Size Control
+# Global Batch Size: The total number of samples processed across all GPUs in the entire 
+# training cluster during a single optimizer step (parameter update).
 # Formula: Global batch size = batch_size × grad_accum_steps × num_gpus
 # When data_flatten is enabled, batch_size also controls the length of flattened data
 batch_size=1         # 📦 Per-device batch size for controlling global batch size and flatten data length
@@ -254,3 +314,38 @@ torchrun --nproc_per_node=2 \
          --master_port=${MASTER_PORT} \
          ${entry_file} ${args}
 ```
+
+---
+
+## 📝 Key Training Parameters Explained
+
+### 🧱 Model Architecture
+- **`extra_num_layers`**: Number of pre-buffer layers (default: 12)
+- **`num_hidden_layers`**: Total layers in the model (default: 28)
+- **`train_buffer`**: Whether to train only the pre-buffer layers
+
+### 💾 Batch Size & Memory
+- **`per_device_train_batch_size`**: Samples per GPU per forward pass
+- **`gradient_accumulation_steps`**: Accumulate gradients over N steps
+- **Global Batch Size Formula**: `batch_size × grad_accum_steps × num_gpus`
+
+### 📏 Sequence Length
+- **`max_seq_length`**: Maximum length after data packing (default: 18432)
+- **`model_max_length`**: Model's maximum context length (should match above)
+
+### 🖼️ Image Processing
+- **`max_pixels`**: Maximum pixels for image processing (default: 262144)
+- **`min_pixels`**: Minimum pixels for image processing (default: 12544)
+
+### 🎓 Learning Parameters
+- **`learning_rate`**: Optimizer learning rate (default: 2e-4)
+- **`warmup_steps`**: Learning rate warmup steps (default: 1000)
+- **`max_grad_norm`**: Gradient clipping threshold (default: 1)
+
+---
+
+## 🎉 You're All Set!
+
+Start your training journey with NEO and build powerful vision-language models! 
+
+For issues or questions, please visit our [GitHub repository](https://github.com/EvolvingLMMs-Lab/NEO).
