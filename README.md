@@ -4,7 +4,7 @@
   <img src="docs/NEO_architecture.jpg" width="80%">
 </p>
 
-- **2025/09**: [From Pixels to Words -- Towards Native Vision-Language Primitives at Scale](https://arxiv.org/abs/2510.14979) (arXiv 2025)
+- **2025/09**: [From Pixels to Words -- Towards Native Vision-Language Primitives at Scale](https://arxiv.org/abs/2510.14979) (ICLR 2026)
 
 
 ## 📜 News   
