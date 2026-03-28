@@ -67,8 +67,8 @@ class OpenAIWrapper(BaseAPI):
             env_key = os.environ.get('InternVL2_PRO_KEY', '')
             if key is None:
                 key = env_key
-        elif 'abab' in model:
-            env_key = os.environ.get('MiniMax_API_KEY', '')
+        elif 'abab' in model or 'MiniMax-M' in model:
+            env_key = os.environ.get('MiniMax_API_KEY', os.environ.get('MINIMAX_API_KEY', ''))
             if key is None:
                 key = env_key
         elif 'moonshot' in model:

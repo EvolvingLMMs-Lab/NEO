@@ -414,19 +414,33 @@ api_models = {
     "GLM4V_PLUS_20250111": partial(
         GLMVisionAPI, model="glm-4v-plus-0111", temperature=0, retry=10
     ),
-    # MiniMax abab
+    # MiniMax
     "abab6.5s": partial(
         GPT4V,
         model="abab6.5s-chat",
-        api_base="https://api.minimax.chat/v1/chat/completions",
-        temperature=0,
+        api_base="https://api.minimax.io/v1/chat/completions",
+        temperature=0.01,
         retry=10,
     ),
     "abab7-preview": partial(
         GPT4V,
         model="abab7-chat-preview",
-        api_base="https://api.minimax.chat/v1/chat/completions",
-        temperature=0,
+        api_base="https://api.minimax.io/v1/chat/completions",
+        temperature=0.01,
+        retry=10,
+    ),
+    "MiniMax-M2.7": partial(
+        GPT4V,
+        model="MiniMax-M2.7",
+        api_base="https://api.minimax.io/v1/chat/completions",
+        temperature=0.01,
+        retry=10,
+    ),
+    "MiniMax-M2.7-highspeed": partial(
+        GPT4V,
+        model="MiniMax-M2.7-highspeed",
+        api_base="https://api.minimax.io/v1/chat/completions",
+        temperature=0.01,
         retry=10,
     ),
     # CongRong
