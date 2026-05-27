@@ -4,7 +4,7 @@
   <img src="docs/NEO_architecture.jpg" width="80%">
 </p>
 
-- **2026/04**: [SenseNova-U1: Unifying Multimodal Understanding and Generation with NEO-unify Architecture](https://arxiv.org/abs/2605.12500) (Technical Report 2026)
+- **2026/04**: [SenseNova-U1 with NEO-unify Architecture](https://arxiv.org/abs/2605.12500) (Technical Report 2026)
 
 - **2026/02**: [NEO-unify: Building Native Multimodal Unified Models End to End](https://huggingface.co/blog/sensenova/neo-unify) (HuggingFace Blog 2026)
 
@@ -16,9 +16,7 @@
 ## 📜 News   
 
 [2026/05] 🔥 The [paper](https://xxxx), [weights](https://huggingface.co/collections/Paranioar/neo1-5), and [evaluation code](https://github.com/EvolvingLMMs-Lab/NEO/blob/main/VLMEvalKit_ov/README.md) of **NEO-ov** are released !    
-
-[2025/12] 💥 **NEO-ov** has been completed !  
-
+[2025/12] 💥 **NEO-ov** has been completed !   
 [2026/01] 🔥 The [training code](https://github.com/EvolvingLMMs-Lab/NEO/blob/main/VLMTrainKit/README.md) of NEO is released !        
 [2025/10] 🔥 The [paper](https://arxiv.org/abs/2510.14979), [weights](https://huggingface.co/collections/Paranioar/neo1-0), and [evaluation code](https://github.com/EvolvingLMMs-Lab/NEO/blob/main/VLMEvalKit/README.md) of **NEO** are released !     
 [2025/09] 💥 **NEO** has been completed !  
@@ -52,6 +50,7 @@
 
 ## ✒️ Citation 
 If **NEO series** is helpful for your research, please consider **star** ⭐ and **citation** 📝 :
+
 ```bibtex
 @article{Diao2025NEO,
   title        = {From Pixels to Words--Towards Native Vision-Language Primitives at Scale},
@@ -61,8 +60,7 @@ If **NEO series** is helpful for your research, please consider **star** ⭐ and
 }
 
 @article{Diao2026NEOov,
-  title        = {From Pixels to Words--Towards Native One-Vision Models at Scale
-},
+  title        = {From Pixels to Words--Towards Native One-Vision Models at Scale},
   author       = {Diao, Haiwen and Wang, Jiahao and Wu, Penghao and Dong, Yuhao and Niu, Yuwei and Zhu, Yue and Cai, Zhongang and Fan, Weichen and Dai, Linjun and Wu, Silei and others},
   journal      = {arXiv preprint arXiv:xxxx},
   year         = {2026}
