@@ -1,0 +1,7 @@
+numpy==2.4.0
+packaging==25.0
+Pillow==12.1.0
+safetensors==0.7.0
+torch==2.5.1
+torchvision==0.20.1
+transformers==4.57.1
