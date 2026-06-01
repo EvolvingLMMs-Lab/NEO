@@ -415,6 +415,13 @@ api_models = {
         GLMVisionAPI, model="glm-4v-plus-0111", temperature=0, retry=10
     ),
     # MiniMax
+    "MiniMax-M3": partial(
+        GPT4V,
+        model="MiniMax-M3",
+        api_base="https://api.minimax.io/v1/chat/completions",
+        temperature=0.01,
+        retry=10,
+    ),
     "abab6.5s": partial(
         GPT4V,
         model="abab6.5s-chat",
