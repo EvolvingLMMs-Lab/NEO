@@ -29,6 +29,37 @@
 - [x] [Training guide](VLMTrainKit/README.md)
 
 
+## 🤖 Model Zoo
+
+We release 2B and 9B NEO-series models across different training stages.
+
+<div style="overflow-x:auto;">
+<table border="1" cellspacing="0" cellpadding="6" style="white-space:nowrap; width:fit-content; display:inline-table;">
+  <tr>
+    <th align="center">Model Name</th>
+    <th align="center">Model Weight</th>
+  </tr>
+  <tr>
+    <td>NEO</td>
+    <td>
+      <a href="https://huggingface.co/collections/Paranioar/neo1-0">
+        <img src="./VLMEvalKit_ov/assets/huggingface_logo.svg" width="16" height="16" /> NEO1_0 HF link
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td>NEO-ov</td>
+    <td>
+      <a href="https://huggingface.co/collections/Paranioar/neo1-5">
+        <img src="./VLMEvalKit_ov/assets/huggingface_logo.svg" width="16" height="16" /> NEO1_5 HF link
+      </a>
+    </td>
+  </tr>
+</table>
+</div>
+
+
+
 ## 💡 Motivation
 
 <p align="center">
@@ -41,11 +72,32 @@
 
 ## 💡 Highlights
 
-- 🔥 **Native Architecture:** NEO innovates a native VLM primitive  that unifies pixel-word encoding, alignment, and reasoning within a dense, monolithic model architecture. 
+- 🔥 **Native Architecture:** NEO innovates a native VLM primitive that unifies pixel-word encoding, alignment, and reasoning within an encoder-free dense model architecture. 
 
-- 🔥 **Superior Efficiency:** With merely 390M image-text examples, NEO develops strong visual perception from scratch, rivaling top-tier modular VLMs and outperforming native ones.  
+- 🔥 **Superior Efficiency:** Using under 10% of image-text data, NEO develops strong visual perception from scratch, rivaling top-tier modular VLMs and outperforming native encoder-free ones.  
 
-- 🔥 **Promising Roadmap:** NEO pioneers a promising route for scalable and powerful native VLMs, paired with diverse reusable components that foster a cost-effective and extensible ecosystem.
+- 🔥 **Promising Roadmap:** NEO pioneers a promising route for scalable and powerful native encoder-free VLMs, paired with diverse reusable components that foster a cost-effective and extensible ecosystem.
+
+## 🚀 Performance
+
+
+##### 🧠 Single-Image Understanding
+
+<p align="center">
+  <img src="docs/single_image_performance.png">
+</p>
+
+##### 🎬 Multi-Image & Video Understanding
+
+<p align="center">
+  <img src="docs/multi_image_video_performance.png">
+</p>
+
+##### 🌐 Spatial Intelligence
+
+<p align="center">
+  <img src="docs/spatial_intelligence_performance.png">
+</p>
 
 
 ## ✒️ Citation 
