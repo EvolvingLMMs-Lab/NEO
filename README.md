@@ -81,19 +81,19 @@ We release 2B and 9B NEO-series models across different training stages.
 ## 🚀 Performance
 
 
-##### 🧠 Single-Image Understanding
+#### 🧠 Single-Image Understanding
 
 <p align="center">
   <img src="docs/single_image_performance.png">
 </p>
 
-##### 🎬 Multi-Image & Video Understanding
+#### 🎬 Multi-Image & Video Understanding
 
 <p align="center">
   <img src="docs/multi_image_video_performance.png">
 </p>
 
-##### 🌐 Spatial Intelligence
+#### 🌐 Spatial Intelligence
 
 <p align="center">
   <img src="docs/spatial_intelligence_performance.png">
