@@ -4,6 +4,7 @@ GPUS=(0 1)
 
 LOG_DIR="./logs"
 MODELS=(
+    "NEOov-2B-si"
     "NEOov-9B-si"
 )
 DATASETS=(

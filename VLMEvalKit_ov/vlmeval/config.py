@@ -1772,7 +1772,7 @@ neo_series = {
         downsample_ratio=0.5,
     ),
     "NEOov-2B-si": partial(
-        NEOChat,
+        NEOChatSI,
         model_path="Paranioar/NEO1_5-2B-SFT",
         patch_size=16,
         min_pixels=720 * 960,
@@ -1796,7 +1796,7 @@ neo_series = {
         downsample_ratio=0.5,
     ),
     "NEOov-9B-si": partial(
-        NEOChat,
+        NEOChatSI,
         model_path="Paranioar/NEO1_5-9B-SFT",
         patch_size=16,
         min_pixels=720 * 960,
