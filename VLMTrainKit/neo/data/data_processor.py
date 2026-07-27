@@ -369,16 +369,6 @@ class FlattenedDataCollatorForSupervisedDataset:
                 ),
             )
         )
-        labels = torch.cat(
-            [labels[1:], torch.full(size=(1,), fill_value=IGNORE_INDEX)], dim=-1
-        )
-        token_weights = torch.cat(
-            [
-                token_weights[1:],
-                torch.zeros(size=(1,), dtype=token_weights.dtype),
-            ],
-            dim=-1,
-        )
         indexes = torch.tensor(token_indexes, dtype=torch.long)
         seq_boundaries = torch.tensor(seq_boundaries, dtype=torch.int32)
         loss_weight = torch.where(
