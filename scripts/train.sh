@@ -17,15 +17,17 @@ usage() {
 usage: train.sh --root DIR --corpus NAME --run-name NAME --backbone DIR
                 --arch NAME --mode NAME --data NAME --schedule NAME
                 [--output-root DIR] [--nproc N] [--workers N] [--prefetch N]
-                [--prep-dir DIR] [--manifest-dir DIR]
+                [--metadata-dir DIR] [--manifest-dir DIR]
                 [--nnodes N] [--node-rank I] [--master-addr HOST]
                 [--master-port PORT]
                 [--global-batch N] [--per-device-batch N] [--accumulation N]
                 [--print-hydra]
                 [-- OVERRIDE ...]
 
-  --root         the corpus root; becomes NEO_VLA_DATA_ROOT
+  --root         the data root; becomes NEO_VLA_DATA_ROOT
   --corpus       which prepared manifest (and normaliser) to read
+  --metadata-dir the folder holding the corpus's embodiments.json, relative
+                 to --root; default metadata/<corpus>
   --run-name     names the run directory. Launching again with the same name
                  resumes from the newest checkpoint in it
   --backbone     the backbone checkpoint; becomes NEO_VLA_BACKBONE
@@ -94,7 +96,7 @@ output_root=""
 nproc=1
 workers=""
 prefetch=""
-prep_dir=""
+metadata_dir=""
 manifest_dir="manifests"
 nnodes=1
 node_rank=0
@@ -120,7 +122,7 @@ while [ "$#" -gt 0 ]; do
         --nproc) nproc="${2:-}"; shift 2 ;;
         --workers) workers="${2:-}"; shift 2 ;;
         --prefetch) prefetch="${2:-}"; shift 2 ;;
-        --prep-dir) prep_dir="${2:-}"; shift 2 ;;
+        --metadata-dir) metadata_dir="${2:-}"; shift 2 ;;
         --manifest-dir) manifest_dir="${2:-}"; shift 2 ;;
         --nnodes) nnodes="${2:-}"; shift 2 ;;
         --node-rank) node_rank="${2:-}"; shift 2 ;;
@@ -181,8 +183,8 @@ fi
 # The corpus root as its physical path when it exists (the manifest's paths are
 # relative to it); otherwise as given, and the runner's own open is what fails.
 if [ -d "$root" ]; then root=$( cd "$root" && pwd -P ); else root="${root%/}"; fi
-# The preparation outputs of a corpus sit beside it, as prep_<corpus>.
-if [ -z "$prep_dir" ]; then prep_dir="prep_$corpus"; fi
+# A corpus's stage records and normaliser sit under metadata/<corpus>.
+if [ -z "$metadata_dir" ]; then metadata_dir="metadata/$corpus"; fi
 if [ -z "$output_root" ]; then output_root="$root/outputs"; fi
 manifest="$root/$manifest_dir/$corpus.json"
 
@@ -209,7 +211,7 @@ fi
 # left to the data group's pattern, and data.corpus goes with it.
 hydra=(run_name="$run_name" arch="$arch" mode="$mode" data="$data"
        schedule="$schedule" data.corpus="$corpus" data.manifest="$manifest"
-       data.train.normaliser="$root/$prep_dir/embodiments.json")
+       data.train.normaliser="$root/$metadata_dir/embodiments.json")
 if [ -n "$accumulation" ]; then
     hydra+=(schedule.global_batch="$global_batch"
             schedule.per_device_batch="$per_device_batch"

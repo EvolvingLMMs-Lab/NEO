@@ -28,8 +28,6 @@ dependencies = [
 # Data preprocessing: the joint sidecars read AgiBot and DROID HDF5 (h5py); the
 # camera-pose QC uses OpenCV and, for DROID, SciPy rotations.
 prep = ["h5py", "scipy", "opencv-python-headless"]
-# The private dataset upload in data_release/stage_upload.py --upload.
-data-release = ["huggingface_hub"]
 dev = ["pytest", "ruff", "h5py"]
 
 [tool.setuptools.packages.find]

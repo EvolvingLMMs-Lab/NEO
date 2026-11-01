@@ -14,7 +14,7 @@ refused, and the refusals are counted by reason in the header.
 Usage:
     python tools/build_intrinsics.py --root /corpus --source agibot \
         --calib calib/agibot_intrinsics --dirs-file dirs.txt \
-        --layouts config/layouts/gd7.json --out prep/intrinsics_agibot.jsonl
+        --layouts config/layouts/action_pretrain.json --out metadata/C/intrinsics_agibot.jsonl
 """
 from __future__ import annotations
 
@@ -125,8 +125,8 @@ CAMERA_VIEWS = {
 # Which layout source each reader's directories belong to. The one-camera DROID
 # is one family inside the oxe layout rather than a source of its own, so the
 # reader's name and the layout's source are two words and are kept apart here.
-# The three-camera DROID tree is its own source: config/layouts/oxe3src_gd6.json
-# and gd7.json assign oxe/droid3cam* to source droid3cam.
+# The three-camera DROID tree is its own source: config/layouts/action_pretrain.json
+# assigns oxe/droid3cam* to source droid3cam.
 LAYOUT_SOURCE = {"agibot": "agibot", "rh20t": "rh20t", "droid": "oxe", "oxe": "oxe",
                  "droid3cam": "droid3cam", "robotwin2": "robotwin2"}
 

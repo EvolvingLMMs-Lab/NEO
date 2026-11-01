@@ -28,7 +28,6 @@ from neo_vla.constants import (
 from neo_vla.data.reader import (
     INGEST_STAMP,
     SIDECAR_FORMAT,
-    SIDECAR_PINS,
     SIDECAR_STAMP_KEY,
     SIDECAR_TOOL_VERSION,
 )
@@ -96,8 +95,8 @@ def read_sidecar_stamp(path: Path) -> dict[str, Any]:
 
 
 def check_sidecar_stamp(stamp: dict[str, Any], name: str, columns: list[str],
-                        where: str) -> dict[str, str]:
-    """Refuse a sidecar stamp from another writer, layout or entry; return its pins.
+                        where: str) -> None:
+    """Refuse a sidecar stamp from another writer, layout or entry.
 
     The stamp must name this format, the v7 ingest layout (v6 named), the
     sidecar writer's version the reader takes (SIDECAR_TOOL_VERSION, not the
@@ -118,11 +117,6 @@ def check_sidecar_stamp(stamp: dict[str, Any], name: str, columns: list[str],
         raise refuse_stamp(where, f"wrote {stamp.get('column_order')} and the layouts read "
                                   f"{missing}", "every column the layouts read",
                            "rebuild the sidecar for this layout")
-    pins = {pin: stamp.get(pin) for pin in SIDECAR_PINS}
-    if not all(isinstance(value, str) and value for value in pins.values()):
-        raise refuse_stamp(where, f"states pins {pins}", f"{list(SIDECAR_PINS)} as digests",
-                           "rebuild the sidecar with the sidecar writer")
-    return pins
 
 
 def sidecar_rows(stamp: dict[str, Any], where: str) -> dict[int, int]:

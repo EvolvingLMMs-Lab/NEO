@@ -1,7 +1,0 @@
-{
-  "corpus": "gd7_tokens_nobw",
-  "counts": "verified against existing manifest and normalizer receipts",
-  "projection_census": "No pose_qc entry found in current cache index; verification or completion required before all-five-stage certification",
-  "redistribution": "Exact source revisions, license files and conditions must be resolved per source",
-  "payload_upload_started": false
-}

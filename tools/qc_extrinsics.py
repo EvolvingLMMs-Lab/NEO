@@ -11,8 +11,8 @@ scored again under a pose recorded elsewhere, which reads as wrong.
 
 Usage:
     python tools/qc_extrinsics.py --root /corpus --source agibot --control \
-        --calib calib/agibot_extrinsics --intrinsics prep/intrinsics_agibot.jsonl \
-        --layouts config/oxe3src.json --out prep/qc_extrinsics_agibot.jsonl
+        --calib calib/agibot_extrinsics --intrinsics metadata/C/intrinsics_agibot.jsonl \
+        --layouts config/layouts/action_pretrain.json --out metadata/C/qc_extrinsics_agibot.jsonl
 """
 from __future__ import annotations
 

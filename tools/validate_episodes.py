@@ -11,8 +11,8 @@ state, zero rows presented as valid, missing instruction text, a quaternion
 that is not a rotation, and an extrinsic that is not one either.
 
 Usage:
-    python tools/validate_episodes.py --root /corpus --inventory prep/inventory.jsonl \
-        --layouts config/layouts/gd7.json --out prep/validation.jsonl
+    python tools/validate_episodes.py --root /corpus --inventory metadata/C/inventory.jsonl \
+        --layouts config/layouts/action_pretrain.json --out metadata/C/validation.jsonl
 """
 from __future__ import annotations
 

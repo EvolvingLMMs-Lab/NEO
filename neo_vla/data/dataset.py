@@ -15,7 +15,6 @@ constants.batch_keys.
 from __future__ import annotations
 
 import copy
-import hashlib
 import json
 import logging
 import math
@@ -51,6 +50,7 @@ from ..constants import (
     STATE_HAND,
     STATE_JOINTS,
     batch_keys,
+    prefix_layout_of,
     refusal_prefix,
 )
 from ..model.tokenizers import within_range
@@ -95,7 +95,7 @@ from .mixture import (
 from .mixture import draw as draw_window
 from .prompt.stamp import Stamp
 from .rays import Intrinsics
-from .reader import SIDECAR_PINS, CacheReader, StoredParts
+from .reader import CacheReader, StoredParts
 from .reference import (
     PER_ARM,
     SHARED,
@@ -203,16 +203,16 @@ LABEL_POOL_KEYS = ("dir", "sources")
 class Provenance:
     """Who wrote a stage output, from what, and when.
 
-    inputs maps each input file to its hash, so a manifest that was rebuilt
-    after its stats changed can be told from one that was not. Every
-    preparation stage output carries one of these.
+    inputs names each root-relative input file the stage read (an older
+    header maps each to a checksum, which is not kept). Every preparation
+    stage output carries one of these.
     """
 
     schema_version: int
     tool: str
     tool_version: str
     git_commit: str
-    inputs: dict[str, str]
+    inputs: tuple[str, ...]
     created: str
 
 
@@ -357,7 +357,7 @@ class DatasetEntry:
     column. The manifest's scale_cm_per_step is the tools' speed QC and is not
     read here: nothing trains on it since the scale token was retired.
     client_record is the six client-input fields the embodiments file's
-    datasets record is digested over, recomputed from this entry. body is
+    datasets record is compared on, recomputed from this entry. body is
     the key's body layout (None for a fixed base); stored names the v7
     columns the layouts read and their writer (None when they read none).
     """
@@ -478,7 +478,6 @@ class Manifest:
     prompt_cache: str
     prompt_stamp: Stamp
     provenance: Provenance
-    sha256: str = ""
 
     def index_of(self, name: str) -> int:
         """The position of a directory in entries. Raises for an unknown name."""
@@ -556,8 +555,7 @@ def load_manifest(path: str | Path, *, root: str | Path,
     no weight, which is what stops an unlisted corpus entering at a default.
     """
     manifest_path = Path(path)
-    data = manifest_path.read_bytes()
-    document = json.loads(data.decode("utf-8"))
+    document = json.loads(manifest_path.read_bytes().decode("utf-8"))
     where = str(manifest_path)
     version = _require(document, "schema_version", where)
     if int(version) != SCHEMA_VERSION:
@@ -610,7 +608,6 @@ def load_manifest(path: str | Path, *, root: str | Path,
         prompt_cache=str(_require(prompt, "cache", where)),
         prompt_stamp=_read_stamp(_require(prompt, "stamp", where), where),
         provenance=_read_provenance(_require(document, "provenance", where), where),
-        sha256=hashlib.sha256(data).hexdigest(),
     )
     _check_totals(manifest, _require(document, "totals", where), where)
     from .prompt.embodiments import validate_manifest_prompts
@@ -644,7 +641,7 @@ class RobotDataset(Dataset):
     """The robot corpus as a map from a draw index to one sample.
 
     An index is a draw identifier, not an address in the corpus: index i is
-    hashed with seed into the two-level draw in neo_vla.data.mixture, so
+    mixed with seed into the two-level draw in neo_vla.data.mixture, so
     __getitem__ is deterministic and a resumed run replays the windows it would
     have drawn. len is epoch_samples, a config number. An index at or past it
     is pass i // epoch_samples of window i % epoch_samples: the window repeats
@@ -782,8 +779,8 @@ class RobotDataset(Dataset):
             raise ValueError(
                 f"data.train.sampling is {self.sampling!r}.\n"
                 f"Expected one of {SAMPLINGS}.\n"
-                "gd7 and the groups built on it (stage 1, stage 2, debug) state rows; "
-                "post-train groups draw."
+                "action_pretrain and the groups built on it (stages 1 and 2) state rows; "
+                "robot_adaptation draws."
             )
         self._rule = None if mixture is None else MixtureRule.from_config(mixture)
         self._families = None if self._rule is None else family_table(self._plan, self._rule)
@@ -1181,7 +1178,7 @@ class RobotDataset(Dataset):
                 "control_hz": sorted(slot["rates"], key=lambda hz: (hz is not None, hz or 0.0)),
             }
         return {
-            "manifest_sha256": self.manifest.sha256,
+            "corpus": self.manifest.corpus,
             "keys": summary,
             "blocked_episodes": sum(len(blocked) for blocked in self._blocked),
         }
@@ -1423,7 +1420,7 @@ class RobotDataset(Dataset):
                 raise ValueError(
                     "data.train.normaliser is not set.\n"
                     "Expected the embodiments.json this run normalises through.\n"
-                    "Set it to ${data.root}/prep_${data.corpus}/embodiments.json."
+                    "Set it to ${data.root}/metadata/${data.corpus}/embodiments.json."
                 )
             return None
         path = Path(normaliser)
@@ -1444,17 +1441,18 @@ class RobotDataset(Dataset):
                 for arm in entry.arms:
                     emb.slot_index(arm.slot)
             record = self._embodiments.record(entry.name)
-            wanted = embodiment.record_digest(entry.client_record)
-            if record.digest != wanted:
+            wanted = embodiment.record_inputs(entry.client_record)
+            if record.inputs != wanted:
                 raise ValueError(
                     f"{refusal_prefix(4)} directory {entry.name!r}: the embodiments file's "
-                    f"record is {record.digest} and this manifest's entry gives {wanted}.\n"
+                    f"record differs from this manifest's entry in "
+                    f"{embodiment.identity_differs(record.inputs, wanted)}.\n"
                     "Expected the normaliser built from the manifest this run trains.\n"
                     "Rebuild the stats from this manifest, or train the manifest they came from."
                 )
             self._check_parts_held(entry, record)
             # The six client fields leave the rotation convention out, so the
-            # record digest cannot see a manifest whose convention moved after
+            # record inputs cannot see a manifest whose convention moved after
             # the stats were measured; the record's drot can.
             drot = embodiment.DROT_RECORD[entry.rotation_delta_frame]
             if record.drot != drot:
@@ -2821,8 +2819,8 @@ def _read_stored(columns: dict, sidecar: dict | None, *, name: str, arms: tuple,
     The columns block names each part column exactly when a layout reads it,
     in the one spelling every writer uses (neo_vla.constants COLUMN_*), and
     null otherwise; a command column exactly when a target names it. sidecar
-    is null for an ingest output, or the stage-1 sidecar the cache stage
-    merged, with the digests the reader holds the merged stamp to.
+    is null for an ingest output, or the path of the stage-1 sidecar the cache
+    stage merged; checksum fields an older manifest states beside it are not read.
     """
     reads = {
         "joints": any(arm.state is not None and arm.state.joints is not None for arm in arms),
@@ -2852,20 +2850,18 @@ def _read_stored(columns: dict, sidecar: dict | None, *, name: str, arms: tuple,
         if reads[field]:
             widths[spelling] = block * (len(arms) if field in ARM_COLUMNS else 1)
     if sidecar is not None:
-        missing = [key for key in ("path", *SIDECAR_PINS) if key not in sidecar]
+        missing = "path" not in sidecar
         if not widths or missing:
             raise ValueError(
                 f"directory {name!r} states sidecar {sidecar!r}"
-                + (f" with no {missing}" if missing else " and reads no stored column") + ".\n"
-                f"Expected a sidecar only where a layout reads its columns, with its path and "
-                f"{list(SIDECAR_PINS)}.\n"
+                + (" with no path" if missing else " and reads no stored column") + ".\n"
+                "Expected a sidecar only where a layout reads its columns, with its path.\n"
                 "Rebuild the manifest with this tree's manifest stage."
             )
     if not widths:
         return None
-    pins = None if sidecar is None else {pin: str(sidecar[pin]) for pin in SIDECAR_PINS}
     return StoredParts(columns=widths, origin="ingest" if sidecar is None else "sidecar",
-                       entry=name, pins=pins)
+                       entry=name)
 
 
 def _read_part(raw: dict | None, field: str, name: str, arm: str,
@@ -3344,13 +3340,12 @@ def _read_intrinsics(raw: dict, name: str, where: str) -> IntrinsicsEntry:
 
 
 def _read_stamp(raw: dict, where: str) -> Stamp:
+    """The manifest's prompt stamp; extra fields an older stamp holds are not read."""
     stamp = Stamp(
         template_name=str(_require(raw, "template_name", where)),
-        template_version=str(_require(raw, "template_version", where)),
-        template_digest=str(_require(raw, "template_digest", where)),
         tokenizer_id=str(_require(raw, "tokenizer_id", where)),
         max_text_tokens=int(_require(raw, "max_text_tokens", where)),
-        prefix_layout=str(_require(raw, "prefix_layout", where)),
+        prefix_layout=prefix_layout_of(_require(raw, "prefix_layout", where)),
         n_views=int(_require(raw, "n_views", where)),
         intrinsics_mode=str(_require(raw, "intrinsics_mode", where)),
     )
@@ -3361,20 +3356,6 @@ def _read_stamp(raw: dict, where: str) -> Stamp:
             f"Expected {PREFIX_LAYOUT!r}; another layout describes a different prefix.\n"
             "Re-render the prompt cache against this tree's template."
         )
-    # And the artifact behind it. The layout above is a string a tool wrote
-    # into the stamp; the version is the artifact's own, and the two are the
-    # same statement. Held together because they were once written by two
-    # different hands: a v4 template stamped 'v5' passed the check above and
-    # reached the model carrying neither the geometry wording nor its width.
-    major = stamp.template_version.split(".")[0]
-    if major != PREFIX_LAYOUT.lstrip("v"):
-        raise ValueError(
-            f"{where} names prefix layout {PREFIX_LAYOUT!r} and template version "
-            f"{stamp.template_version!r}.\n"
-            f"Expected a version {PREFIX_LAYOUT.lstrip('v')} artifact; the layout and "
-            "the artifact that describes it are one statement.\n"
-            "Rebuild the manifest against this tree's template."
-        )
     return stamp
 
 
@@ -3384,8 +3365,7 @@ def _read_provenance(raw: dict, where: str) -> Provenance:
         tool=str(_require(raw, "tool", where)),
         tool_version=str(_require(raw, "tool_version", where)),
         git_commit=str(_require(raw, "git_commit", where)),
-        inputs={str(key): str(value)
-                for key, value in _require(raw, "inputs", where).items()},
+        inputs=tuple(sorted(str(name) for name in _require(raw, "inputs", where))),
         created=str(_require(raw, "created", where)),
     )
 

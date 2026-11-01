@@ -31,15 +31,15 @@ train:
   chunk: ${model.action.chunk}
   action_dim: ${model.action.action_dim}
   gripper_dims: ${model.action.gripper_dims}
-  tokenizer_id: ${model.tokenizer_path}
+  tokenizer_id: ${oc.env:NEO_VLA_TOKENIZER_ID,neo-2b}
   max_text_tokens: ${model.prefix.max_text_tokens}
   epoch_samples: 3840000                  # every draw of the run; the launcher states max_steps x global_batch
   seed: ${seed}
   intrinsics_mode: ${model.prefix.intrinsics_mode}
   pixel_convention: ${model.vision.pixel_convention}
-  normaliser: ${data.root}/prep_${data.corpus}/embodiments.json
+  normaliser: ${data.root}/metadata/${data.corpus}/embodiments.json
   history_dropout: 0.1
-  state_noise: {sigma: 0.02, rot_sigma_rad: 0.02, prob: 0.8}   # as data/gd7.yaml
+  state_noise: {sigma: 0.02, rot_sigma_rad: 0.02, prob: 0.8}   # as data/action_pretrain.yaml
   understanding:
     _target_: neo_vla.data.understanding.ShareGPT4VCoco
     chat_format: neo_native

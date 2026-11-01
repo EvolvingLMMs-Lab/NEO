@@ -14,4 +14,4 @@ The Apache-2.0 license in this repository covers NEO-VLA code. Dataset files ret
 | RoboCOIN | Apache-2.0 on the inspected individual dataset card | [Example publisher card](https://huggingface.co/datasets/RoboCOIN/Realman_RMC_AIDA_L_storage_towel_basket) | Check each selected upstream dataset; one card does not establish all directories' terms. |
 | RoboMIND | Apache-2.0 in the publisher dataset card | [Dataset](https://huggingface.co/datasets/x-humanoid-robomind/RoboMIND) | Match the selected release and include license/notice files. |
 
-Terms were checked on 2026-11-01. The processed corpus spans these nine families. Upload approval is recorded per source in the release manifest after its exact revision, attribution, license files and conditions are resolved. The prepared manifest does not approve payload upload by itself.
+Terms were checked on 2026-11-01. The processed corpus spans these nine families. A source's processed files may be redistributed only once its exact revision, attribution, license files and conditions are resolved as listed above; the corpus manifest does not by itself grant any of these rights.

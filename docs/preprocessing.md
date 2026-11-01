@@ -3,7 +3,8 @@
 These tools turn converted robot datasets into the manifest, cache and
 normaliser that training reads. Every stage is one program under `tools/` and
 writes one file. That file starts with a provenance header: schema version,
-tool and version, git commit, the sha256 of each input, and the creation time.
+tool and version, git commit, the root-relative path of each input, and the
+creation time.
 Paths inside outputs are relative to the corpus root (`--root`).
 
 The pipeline starts from converted directories, one per dataset: per-episode
@@ -16,16 +17,21 @@ the package importable:
 
 ```bash
 export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}
-R=$NEO_VLA_DATA_ROOT          # corpus root
-C=gd7_tokens_nobw             # corpus name
-P=prep_$C                     # stage outputs, as scripts/train.sh expects
+R=$NEO_VLA_DATA_ROOT          # data root
+C=action_pretrain             # corpus name
+P=metadata/$C                 # stage records and normaliser, as scripts/train.sh expects
 ```
+
+Every corpus uses one layout under the root: the manifest at
+`manifests/<corpus>.json`, stage records, normaliser and sidecars under
+`metadata/<corpus>/`, and the numeric, frame, camera and prompt caches under
+`processed/<corpus>/`. `tools/prepare_data.py` uses these by default.
 
 Inputs are read from under the root. That includes the calibration and pose
 trees passed with `--calib`, which may be links into the source trees. Copy
-`config/layouts/<layout>.json` and `config/prompt_template/neo_v7.yaml` there
-at the same relative paths. Do
-not edit the template: prompt caches record its checksum.
+`config/layouts/<layout>.json` and `config/prompt_template/policy.yaml` there
+at the same relative paths; prompt caches record the template's name, and a
+cache rendered from an edited template must be rebuilt.
 `config/embodiments.yaml` and `config/rates/oxe_published.json` are read from
 the repository.
 
@@ -76,8 +82,9 @@ python tools/sidecars/verify.py --root $R --manifest <same manifest> --out $R/$P
 `--manifest` can be any manifest whose entries name the directories (each
 entry named after its directory, with its row count). For a corpus that has no
 manifest yet, `build` takes `--layouts <layout> --dirs D1,D2,...` together with
-an explicit `--out`. `build_manifest.py --sidecars $P/sidecars` then pins each
-sidecar's stamp, and `build_cache.py` merges the sidecars into the arrow files.
+an explicit `--out`. `build_manifest.py --sidecars $P/sidecars` then checks each
+sidecar's stamp and episodes and names it in the manifest, and `build_cache.py`
+merges the sidecars into the arrow files.
 
 ### 2. Dead and wrapping channels
 
@@ -114,7 +121,7 @@ stored data.
 ```bash
 python tools/scan_source.py --root $R --dirs-file dirs.txt --out $P/inventory.jsonl
 python tools/validate_episodes.py --root $R --inventory $P/inventory.jsonl \
-    --layouts config/layouts/gd7.json --out $P/validation.jsonl
+    --layouts config/layouts/action_pretrain.json --out $P/validation.jsonl
 python tools/filter_episodes.py --root $R --validation $P/validation.jsonl --out $P/kept.jsonl \
     --drop data_file_missing --drop episode_unreadable --drop rows_mismatch \
     --drop frames_missing --drop episode_too_short --drop state_width_mismatch \
@@ -143,9 +150,9 @@ frame size they were measured against:
 
 ```bash
 python tools/build_intrinsics.py --root $R --source agibot --calib <AgiBot calibration tree> \
-    --dirs-file agibot_dirs.txt --layouts config/layouts/gd7.json --out $P/intrinsics_agibot.jsonl
+    --dirs-file agibot_dirs.txt --layouts config/layouts/action_pretrain.json --out $P/intrinsics_agibot.jsonl
 python tools/validate_intrinsics.py --root $R --intrinsics $P/intrinsics_agibot.jsonl \
-    --layouts config/layouts/gd7.json --out $P/intrinsics_validation.jsonl
+    --layouts config/layouts/action_pretrain.json --out $P/intrinsics_validation.jsonl
 ```
 
 `validate_intrinsics.py` names, per record: non-positive focal lengths or
@@ -175,7 +182,7 @@ the episode's own pose beats its control (`win_rate`).
 python tools/qc_extrinsics.py --root $R --source agibot --control \
     --calib <AgiBot pose tree holding head_extrinsic_sidecar.jsonl> \
     --intrinsics $P/intrinsics_agibot.jsonl --dirs-file agibot_dirs.txt \
-    --layouts config/layouts/gd7.json --out $P/qc_extrinsics_agibot.jsonl --workers 32
+    --layouts config/layouts/action_pretrain.json --out $P/qc_extrinsics_agibot.jsonl --workers 32
 # DROID exterior cameras: same score and threshold, lab-swap control
 python tools/qc_droid_extrinsics.py --root $R --control --calib <DROID pose tree> \
     --dirs-file droid_dirs.txt --urdf <Franka Panda URDF> --out $P/qc_droid.jsonl --workers 32
@@ -184,7 +191,7 @@ python tools/qc_droid_extrinsics.py --root $R --control --calib <DROID pose tree
 `qc_droid_extrinsics.py` needs a Franka Panda URDF supplied by you. Its hand
 links are what gets projected. The URDF is third-party and is not distributed
 here; follow its own licence. The output header records the URDF's resolved
-path and sha256.
+path.
 
 `build_cache.py --pose-qc` applies the census. It accepts only a
 `qc_extrinsics.py` output whose header states a census (`sample` 0), the 2.5
@@ -204,24 +211,27 @@ does not consume it.
 ```bash
 python tools/build_cache.py --root $R --manifest manifests/$C.json --kept $P/kept.jsonl \
     --inventory $P/inventory.jsonl --parts episode_starts,arrow,frames,extrinsics,intrinsics,prompt \
-    --tokenizer $NEO_VLA_BACKBONE --out cache/index.json --pose-qc $P/qc_extrinsics_agibot.jsonl
+    --tokenizer $NEO_VLA_BACKBONE --out processed/$C/index.json \
+    --pose-qc $P/qc_extrinsics_agibot.jsonl
 ```
 
 ## Running everything in order
 
 `tools/prepare_data.py` chains the stages it knows, re-running only those whose
-arguments or inputs changed: scan, validate, filter, scale, frequency,
-weights, calibration, embodiment, gripper, manifest, cache, normaliser,
-verify. It does not run the sidecars or the pose QC, and its cache step takes
-no `--pose-qc`. For a build with both:
+arguments or tool version changed or whose output, inputs or artifacts are
+missing: scan, validate, filter, scale, frequency, weights, calibration,
+embodiment, gripper, manifest, cache, normaliser, verify. File contents are not
+compared, so after editing an input in place pass `--force`, or `--only` with
+the stages that read it. It does not run the sidecars or the pose QC, and its
+cache step takes no `--pose-qc`. For a build with both:
 
 1. Write and verify the joint sidecars (stage 1).
 2. Run `prepare_data.py` through the manifest, passing the drop list and the
    sidecars:
 
    ```bash
-   python tools/prepare_data.py --root $R --corpus $C --prep-dir $P \
-       --layouts config/layouts/gd7.json --dirs-file dirs.txt --sidecars $P/sidecars \
+   python tools/prepare_data.py --root $R --corpus $C \
+       --layouts config/layouts/action_pretrain.json --dirs-file dirs.txt --sidecars $P/sidecars \
        --history-blocked tools/lists/rh20t_history_blocked_20260930.json \
        --calib agibot=<calibration tree> --calib-dirs agibot=agibot_dirs.txt \
        --extrinsics agibot=<pose tree> --extrinsics-dirs agibot=agibot_dirs.txt \
@@ -244,23 +254,17 @@ Training reads `manifests/$C.json` and `$P/embodiments.json`.
 
 ## Reproducing the reference corpus
 
-Outputs record the sha256 of every input. The `config/layouts/gd7.json` and
-`config/embodiments.yaml` in this repository differ from the copies the
-reference corpus was built with only in descriptive text (provenance and
-evidence sentences, comments, two `note` fields). No value a stage reads has
-changed. Their hashes still differ, so a stage that compares recorded input
-hashes treats outputs built from the original copies as built from different
-inputs. To verify the published corpus against its own records, use the
-layout and key table recorded in its provenance. A corpus built with this
-repository's copies is self-consistent, and every normaliser entry digest is
-unchanged.
+Use the released manifest and normalization records with the processed reference
+corpus. Keep these metadata with their corresponding robot rows and frame
+references. Rebuilding the corpus recomputes quantile estimates from sampled
+windows; source revisions and sampling can affect the resulting bounds.
 
 ## A new real-robot corpus (post-train)
 
 1. Convert your recordings into per-episode directories with `meta/info.json`
    and `meta/episodes.jsonl`.
 2. Describe them in a layout file (schema read by `tools/layouts.py`;
-   `config/layouts/gd7.json` is a complete example). Give each new embodiment
+   `config/layouts/action_pretrain.json` is a complete example). Give each new embodiment
    key a block in `config/embodiments.yaml` with `stage: finetune`.
 3. Run `tools/prepare_data.py` with `--stats-from <stage-2 checkpoint>/embodiments.json
    --check-fit` (and `--inherit-action KEY=SRC` where needed). Read the defect

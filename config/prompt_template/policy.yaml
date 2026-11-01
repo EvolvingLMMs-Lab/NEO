@@ -1,7 +1,6 @@
 template:
   name: neo
-  version: "7.0.0"
-  prefix_layout: v7
+  prefix_layout: native
 
 scaffold_sections:
   axis:

@@ -15,7 +15,6 @@ time, and counted per robot and joint in the checks.
 """
 from __future__ import annotations
 
-import hashlib
 import io
 import json
 import logging
@@ -105,14 +104,14 @@ def _tcp_arrays(loaded: Any) -> dict[str, np.ndarray]:
     return arrays
 
 
-def _write_scene(path: Path, arrays: dict[str, np.ndarray]) -> str:
+def _write_scene(path: Path, arrays: dict[str, np.ndarray]) -> int:
+    """Write one scene's npz through a temporary, read it back; returns its byte count."""
     buffer = io.BytesIO()
     np.savez(buffer, **arrays)
     payload = buffer.getvalue()
     temporary = path.with_name(path.name + ".tmp")
     temporary.write_bytes(payload)
-    digest = hashlib.sha256(payload).hexdigest()
-    if stage.sha256_of(temporary) != digest:
+    if temporary.read_bytes() != payload:
         temporary.unlink()
         raise OSError(
             f"{temporary} does not hold the {len(payload)} bytes written to it\n"
@@ -120,7 +119,7 @@ def _write_scene(path: Path, arrays: dict[str, np.ndarray]) -> str:
             "free space under the output root, then run the archive again"
         )
     os.replace(temporary, path)
-    return digest
+    return len(payload)
 
 
 def extract(archive: Path, wanted: set[str], work: Path) -> dict[str, Any]:
@@ -139,7 +138,7 @@ def extract(archive: Path, wanted: set[str], work: Path) -> dict[str, Any]:
         stale.unlink()
     kinds_found: dict[str, set[str]] = {}
     unreadable: dict[str, str] = {}
-    files: dict[str, str] = {}
+    files: dict[str, int] = {}
     pending: dict[str, dict[str, np.ndarray]] = {}
     streamed = 0
 
@@ -198,7 +197,11 @@ def extract(archive: Path, wanted: set[str], work: Path) -> dict[str, Any]:
 
 
 def extracted(archive: Path, work: Path) -> dict[str, Any] | None:
-    """The index of an archive already extracted from these bytes, if it holds."""
+    """The index of an archive already extracted, if it and every scene file still hold.
+
+    A scene file must be there at the byte count the index records; an older
+    index records a checksum instead, and then only its presence is checked.
+    """
     config = archive.name.split(".", 1)[0]
     path = work / config / INDEX
     if not path.exists():
@@ -209,8 +212,10 @@ def extracted(archive: Path, work: Path) -> dict[str, Any] | None:
             or index.get("archive_bytes") != stat.st_size
             or index.get("archive_mtime") != int(stat.st_mtime)):
         return None
-    for scene, digest in index["files"].items():
-        if stage.sha256_of(work / config / f"{scene}.npz") != digest:
+    for scene, recorded in index["files"].items():
+        scene_file = work / config / f"{scene}.npz"
+        if not scene_file.is_file() or (
+                isinstance(recorded, int) and scene_file.stat().st_size != recorded):
             return None
     return index
 
@@ -260,7 +265,7 @@ def lookup(times: np.ndarray, keys: np.ndarray) -> tuple[np.ndarray, np.ndarray]
 
 def episode_joints(record: dict[str, Any], grid: dict[str, np.ndarray],
                    scene: dict[str, np.ndarray] | None, source_root: Path,
-                   digest: common.SourceDigest, where: str) -> dict[str, Any]:
+                   where: str) -> dict[str, Any]:
     """One grid episode's joints and its keying counts."""
     rows = grid["state"].shape[0]
     robot = record["rh20t_robot"]
@@ -285,8 +290,6 @@ def episode_joints(record: dict[str, Any], grid: dict[str, np.ndarray],
             "rebuild the grid directory or check rh20t_views[clock].source"
         )
     keys = np.where(inside, times[np.clip(frames, 0, max(times.shape[0] - 1, 0))], -1)
-    digest.text(f"{record['raw_file_name']}|{record['rh20t_grid_clock_serial']}")
-    digest.array(keys)
     if scene is None or not bool(scene["has_joint"]):
         result["scene_missing"] = True
         return result
@@ -309,11 +312,9 @@ def episode_joints(record: dict[str, Any], grid: dict[str, np.ndarray],
             "check the archive member"
         )
     joints[hit, :count] = values[at[hit], :count]
-    digest.array(joints[hit])
     block = joints[:, :count]
     implausible = common.implausible_joints(block)
     block[implausible] = np.nan
-    digest.array(implausible)
     result["implausible_joint_values"][:count] = implausible.sum(axis=0).tolist()
     result["keyed"] = int(hit.sum())
     if f"tcp_ts__{serial}" in scene:
@@ -346,7 +347,6 @@ def build(entry: dict[str, Any], directory: Path, work: Path,
     columns = common.empty_columns(total, ARMS, command=False)
     episode_column = np.empty(total, dtype=np.int64)
     frame_column = np.empty(total, dtype=np.int64)
-    digest = common.SourceDigest()
     indexes: dict[str, dict[str, Any]] = {}
     checks: dict[str, Any] = {"episodes": len(episodes), "by_robot": {},
                               "tcp_error_cm_max": 0.0, "tcp_rows": 0,
@@ -369,7 +369,7 @@ def build(entry: dict[str, Any], directory: Path, work: Path,
         if scene_name in index["files"]:
             with np.load(work / config / f"{scene_name}.npz") as loaded:
                 scene = {key: loaded[key] for key in loaded.files}
-        result = episode_joints(record, grid, scene, source_root, digest,
+        result = episode_joints(record, grid, scene, source_root,
                                 f"{entry['name']} episode {episode.index}")
         stop = start + episode.rows
         episode_column[start:stop] = episode.index
@@ -394,5 +394,4 @@ def build(entry: dict[str, Any], directory: Path, work: Path,
         start = stop
     return {"episodes": episodes, "columns": columns, "episode_column": episode_column,
             "frame_column": frame_column, "described": DESCRIBED, "arms": ARMS,
-            "source_digest": digest.hexdigest(), "checks": checks,
-            "source_root": str(source_root)}
+            "checks": checks, "source_root": str(source_root)}

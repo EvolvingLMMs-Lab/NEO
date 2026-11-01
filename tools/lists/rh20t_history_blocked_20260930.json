@@ -192,7 +192,7 @@
   "episode_index": "meta/episodes.jsonl episode_index (arrow episode_index at episode_starts[k])",
   "episodes_scanned": 32323,
   "rule": "RH20T episode whose position + quaternion is bit-identical between consecutive rows on >= 90% of steps (pose_same >= 0.9) takes the no-history form",
-  "source_sha256": "5da185723504bf152f1e13d79492d51b0514523f3f898b064d0c1b571f2f7770"
+  "source": "RH20T frozen-pose scan of the stage-1 corpus (pose_same per episode)"
  },
  "schema": "neo_vla_history_blocked_v1"
 }

@@ -62,7 +62,7 @@ preserves NEO's native image convention and tag-mode chat rendering.
 | variable | meaning |
 |---|---|
 | `NEO_VLA_BACKBONE` | NEOpp-2B-SFT checkpoint directory |
-| `NEO_VLA_DATA_ROOT` | corpus root holding `manifests/<corpus>.json` and `prep_<corpus>/embodiments.json` |
+| `NEO_VLA_DATA_ROOT` | data root holding `manifests/<corpus>.json`, `metadata/<corpus>/embodiments.json` and `processed/<corpus>/` |
 | `NEO_VLA_OUTPUT_ROOT` | where run directories go: `<root>/<RUN_NAME>/checkpoints/step_<9 digits>` |
 | `NEO_VLA_PYTHON` | interpreter to use (default `python`) |
 | `NNODES`, `NODE_RANK`, `GPUS_PER_NODE`, `MASTER_ADDR`, `MASTER_PORT` | distributed shape (defaults 1, 0, 8, -, 29500) |
@@ -80,35 +80,47 @@ shape of stages 1 and 2 is 16 nodes x 8 GPUs.
 Keep the inductor cache (`TORCHINDUCTOR_CACHE_DIR`, `TRITON_CACHE_DIR`)
 node-local; stages 1 and 2 compile layers with `torch.compile`.
 
-Prompt caches record the exact checksum of `config/prompt_template/neo_v7.yaml`.
-Build or re-render them with this file before training; caches made with a
-different copy are rejected even when only its comments differ. Use the same
-template throughout all three stages.
+Prompt caches are rendered from `config/prompt_template/policy.yaml` and record
+its name together with the tokenizer, text budget, prefix layout, view count and
+intrinsics mode. Build or re-render them with this file before training, and use
+the same template throughout all three stages.
+
+`NEO_VLA_TOKENIZER_ID` is the portable identifier stored with the prompt cache
+(default `neo-2b`), separate from the local `NEO_VLA_BACKBONE` path. When
+preparing caches with a different tokenizer, use the same identifier for
+`tools/prepare_data.py --tokenizer-id` and training.
 
 ## Stage 1: pretrain
 
 ```bash
 export NEO_VLA_BACKBONE=/path/to/NEOpp-2B-SFT
-export NEO_VLA_DATA_ROOT=/path/to/corpus          # holds manifests/gd7_tokens_nobw.json
+export NEO_VLA_DATA_ROOT=/path/to/corpus          # holds manifests/action_pretrain.json
 export NEO_VLA_OUTPUT_ROOT=/path/to/runs
 NNODES=16 NODE_RANK=0 MASTER_ADDR=rank-0-host bash scripts/stage1.sh
 ```
 
-Recipe (`mode=frozen_vlm data=gd7 schedule=pretrain`): 113,400 steps x 8,192
+Recipe (`mode=frozen_vlm data=action_pretrain schedule=pretrain`): 113,400 steps x 8,192
 samples (8 per GPU x accumulation 8 x 128 GPUs), about one pass of the
 corpus rows; AdamW lr 2e-4, betas (0.9, 0.95), weight decay 1e-10, 2,000
 warmup steps, cosine to 2e-5, gradient clip 1.0; EMA 0.99; seed 0; layers
 compiled (`trainer.compile_layers`), prefix trimmed to 64-column buckets,
 no gradient checkpointing; a checkpoint every 1,000 steps, the last 2 kept.
 
-**Input.** The prepared robot corpus `gd7_tokens_nobw` (2,704 directories,
+**Input.** The prepared robot corpus `action_pretrain` (2,704 directories,
 2,231,583 episodes, 928,401,030 rows from AgiBot, OXE, DROID, RH20T,
 InternData-A1, RoboCOIN, Galaxea, RoboMIND and BimanualYAM), with its
-manifest, cache and normaliser under `NEO_VLA_DATA_ROOT`. The corpus is not
+manifest, caches and normaliser under `NEO_VLA_DATA_ROOT`. The corpus is not
 distributed with this code, and the per-source converters that produced it
-are not included; `config/layouts/gd7.json` documents its layout and
-`config/data/gd7.yaml` its mixture (InternData-A1 fixed at 15%, the other
-families by row count^0.43) and row sampling.
+are not included; `config/layouts/action_pretrain.json` documents its layout
+and `config/data/action_pretrain.yaml` its mixture (InternData-A1 fixed at 15%,
+the other families by row count^0.43) and row sampling.
+
+Runs started with this release draw their windows and post-train frames in a
+deterministic order that differs from earlier builds of this code: the
+per-directory permutation keys, the post-train frame choice and the
+preprocessing tools' sampling seeds are derived from names by integer mixing.
+Each directory's share, every window distribution and the run's determinism
+are unchanged.
 
 **Preprocessing.** [preprocessing.md](preprocessing.md) gives the
 commands that turn converted directories into the manifest, cache and
@@ -134,7 +146,7 @@ export STAGE1_CKPT=$NEO_VLA_OUTPUT_ROOT/stage1/checkpoints/step_000113400
 NNODES=16 NODE_RANK=0 MASTER_ADDR=rank-0-host bash scripts/stage2.sh
 ```
 
-The `gd7_cotrain_cocogptshare` recipe initializes from the stage-1 EMA and trains
+The `action_pretrain_cotrain` recipe initializes from the stage-1 EMA and trains
 the full policy for 75,000 steps with a global robot batch of 8,192. The action
 expert learning rate is 2e-4; the backbone, vision tower and chat head use 5e-5.
 The schedule uses 2,000 warmup steps and cosine decay to 2e-5. EMA is 0.999,
@@ -153,7 +165,7 @@ export REAL_FRAME_SET='my_robot_key=[[camera:1]]'
 NNODES=2 NODE_RANK=0 MASTER_ADDR=rank-0-host bash scripts/posttrain_real.sh
 ```
 
-The `real_cotrain_cocogptshare` recipe performs full fine-tuning from the stage-2
+The `robot_adaptation` recipe performs full fine-tuning from the stage-2
 EMA. Defaults are 30,000 steps, a global robot batch of 128 and 4 rows per device.
 Learning rates are 5e-5 for the expert and 2.5e-5 for the backbone, vision tower
 and chat head, with 1,000 warmup steps, cosine decay to 1e-5 and weight decay
@@ -164,7 +176,7 @@ checkpoint is saved every 1,000 steps and the latest is retained. Set
 | Variable | Meaning |
 |---|---|
 | `REAL_CORPUS` | Manifest name under `NEO_VLA_DATA_ROOT/manifests/` |
-| `REAL_NORMALISER` | `embodiments.json`; defaults to `prep_<REAL_CORPUS>/embodiments.json` |
+| `REAL_NORMALISER` | `embodiments.json`; defaults to `metadata/<REAL_CORPUS>/embodiments.json` |
 | `STAGE2_CKPT` | Stage-2 checkpoint directory |
 | `REAL_FRAME_MODE` | `wrist` (default), `random`, or `none` to retain each directory's manifest `frame_ref` |
 | `REAL_FRAME_SET` | Space-separated `KEY=FRAMES` entries, e.g. `my_key=[[camera:1]]`; for random mode, `my_key=[[robot],[camera:1]]` |
@@ -177,14 +189,14 @@ built by the preparation pipeline; it is not tied to one robot.
    video files with `meta/info.json` and `meta/episodes.jsonl`) with a
    converter for your robot; none is included here.
 2. Describe the directories in a layout file (the schema `tools/layouts.py`
-   reads; `config/layouts/gd7.json` is a full example) and give each new
+   reads; `config/layouts/action_pretrain.json` is a full example) and give each new
    embodiment key a block in `config/embodiments.yaml` with `stage: finetune`
    (optionally `action_from: <pretrain key>`).
 3. Build the manifest, cache and normaliser:
 
    ```bash
    python tools/prepare_data.py --root $NEO_VLA_DATA_ROOT --corpus $REAL_CORPUS \
-       --prep-dir prep_$REAL_CORPUS --layouts config/layouts/my_robot.json \
+       --layouts config/layouts/my_robot.json \
        --dir <source dir> [--dir ...] --drop <rule> ... \
        --tokenizer $NEO_VLA_BACKBONE --tokenizer-id $NEO_VLA_BACKBONE \
        --stats-from $STAGE2_CKPT/embodiments.json --check-fit \
@@ -198,5 +210,6 @@ built by the preparation pipeline; it is not tied to one robot.
    normaliser against the stage-2 checkpoint's own keys; `--check-fit` and the
    run's start-up check hold every key to the normaliser's fit test. Use the
    ten `--drop` rules listed in [preprocessing.md](preprocessing.md)
-   (stage 4). The layout file and `config/prompt_template/neo_v7.yaml` are
-   read from under `--root`.
+   (stage 4). The layout file and `config/prompt_template/policy.yaml` are
+   read from under `--root`. The stage records and normaliser are written to
+   `metadata/$REAL_CORPUS/` and the caches to `processed/$REAL_CORPUS/`.

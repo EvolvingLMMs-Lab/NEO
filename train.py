@@ -1,7 +1,7 @@
 """Hydra entry point. One entry for every run.
 
     torchrun --nproc_per_node=8 train.py run_name=skip28_pretrain \
-        arch=skip28 mode=full_ft data=oxe3src schedule=pretrain
+        arch=skip28 mode=frozen_vlm data=action_pretrain schedule=pretrain
 
 Choices come from the config groups under config/. run_name fixes the run
 directory, which holds the resolved config and the checkpoints; relaunching

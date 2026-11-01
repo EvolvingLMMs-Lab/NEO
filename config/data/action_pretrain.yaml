@@ -1,5 +1,5 @@
 root: ${oc.env:NEO_VLA_DATA_ROOT}
-corpus: gd7_tokens_nobw
+corpus: action_pretrain
 manifest: ${data.root}/manifests/${data.corpus}.json
 fit_check: false
 # Whether a run of this group may add keys to its init checkpoint's (read at
@@ -17,7 +17,7 @@ train:
   chunk: ${model.action.chunk}
   action_dim: ${model.action.action_dim}  # 26, j7_dpos3_drot3_g1_h12
   gripper_dims: ${model.action.gripper_dims}   # [13]
-  tokenizer_id: ${model.tokenizer_path}   # checked against the prompt stamp
+  tokenizer_id: ${oc.env:NEO_VLA_TOKENIZER_ID,neo-2b}   # checked against the prompt stamp
   max_text_tokens: ${model.prefix.max_text_tokens}
   epoch_samples: 928972800                # 113,400 steps x 8,192, one pass, no index replayed
   seed: ${seed}
@@ -47,7 +47,7 @@ train:
   # holds the two against each other.
   pixel_convention: ${model.vision.pixel_convention}
   # The per-embodiment normaliser, beside the manifest it was measured on.
-  normaliser: ${data.root}/prep_${data.corpus}/embodiments.json
+  normaliser: ${data.root}/metadata/${data.corpus}/embodiments.json
   history_dropout: 0.1
   state_noise:
     sigma: 0.02          # position, aperture, joints, hand and body, in model-input units (y in [-1, 1])

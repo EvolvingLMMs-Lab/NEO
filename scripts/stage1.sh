@@ -16,9 +16,9 @@ ACCUMULATION=$(neo_accumulation "$GLOBAL_BATCH" "$PER_DEVICE_BATCH")
 
 NEO_ENV=(HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}" TRANSFORMERS_OFFLINE="${TRANSFORMERS_OFFLINE:-1}")
 
-train=(--root "$NEO_VLA_DATA_ROOT" --corpus "${STAGE1_CORPUS:-gd7_tokens_nobw}"
+train=(--root "$NEO_VLA_DATA_ROOT" --corpus "${PRETRAIN_CORPUS:-action_pretrain}"
        --run-name "${RUN_NAME:-stage1}" --backbone "$NEO_VLA_BACKBONE"
-       --arch skip28 --mode frozen_vlm --data gd7 --schedule pretrain
+       --arch skip28 --mode frozen_vlm --data action_pretrain --schedule pretrain
        --output-root "$NEO_VLA_OUTPUT_ROOT" --nproc "$GPUS_PER_NODE"
        --workers "${WORKERS:-8}" --prefetch "${PREFETCH:-8}")
 if [ "$NNODES" != 1 ]; then

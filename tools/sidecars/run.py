@@ -33,7 +33,6 @@ import layouts as layout_table  # noqa: E402
 import stage  # noqa: E402
 
 import neo_vla  # noqa: E402
-from neo_vla.constants import PREFIX_LAYOUT  # noqa: E402
 from sidecars import agibot, common, droid, libero, oxe, rh20t  # noqa: E402
 
 logger = logging.getLogger("sidecars")
@@ -48,12 +47,12 @@ WORK = "_work"
 
 
 def check_tree() -> None:
-    """Refuse to run against a neo_vla that is not this tree's v7 one."""
+    """Refuse to run against a neo_vla that is not this tree's own."""
     library = Path(neo_vla.__file__).resolve().parent
-    if library != REPO / "neo_vla" or PREFIX_LAYOUT != "v7":
+    if library != REPO / "neo_vla":
         raise RuntimeError(
-            f"neo_vla is imported from {library} (layout {PREFIX_LAYOUT})\n"
-            f"expected {REPO / 'neo_vla'} at layout v7\n"
+            f"neo_vla is imported from {library}\n"
+            f"expected {REPO / 'neo_vla'}\n"
             "put this tree first on PYTHONPATH"
         )
 
@@ -118,8 +117,7 @@ def build_entry(job: tuple[dict[str, Any], dict[str, Any]]) -> dict[str, Any]:
             built = libero.build(entry, directory)
         else:
             built = oxe.build(entry, directory)
-        receipt = common.write_built(out, entry, family, directory, built,
-                                     settings["git_commit"])
+        receipt = common.write_built(out, entry, family, built, settings["git_commit"])
     except (common.Misaligned, OSError, ValueError, KeyError, StopIteration) as error:
         return {"name": name, "family": family, "status": "refused",
                 "error": f"{type(error).__name__}: {error}",
@@ -145,8 +143,8 @@ def layout_entries(root: Path, layouts: Path, dirs: list[str]) -> list[dict[str,
 
     A post-train corpus has no manifest before its sidecars (build_manifest reads them),
     so build --layouts L --dirs D1,D2,... (for example the LIBERO family with
-    config/layouts/libero_v7.json and --out <root>/prep_libero_v7/sidecars, which has no
-    default: the stage-1 prep is never its target) names them here. name and source are
+    its own layout file and --out <root>/metadata/<corpus>/sidecars, which has no
+    default: the action-pretraining corpus is never its target) names them here. name and source are
     the layout's (tools/layouts.resolve), path the directory and rows its episodes'
     parquet rows; the name must be the directory's own, as read_entries holds a manifest's.
     """
@@ -174,8 +172,8 @@ def run_build(args: argparse.Namespace) -> int:
     if args.layouts is not None and (not args.dirs or not args.out):
         raise ValueError("--layouts needs --dirs and --out\n"
                          "expected the directories to write and where (no default: the "
-                         "stage-1 prep is never a post-train corpus's)\n"
-                         "pass --dirs D1,D2,... and --out <root>/prep_<corpus>/sidecars")
+                         "action-pretraining corpus's folder is never a post-train corpus's)\n"
+                         "pass --dirs D1,D2,... and --out <root>/metadata/<corpus>/sidecars")
     out = Path(args.out) if args.out else common.default_out(root)
     families = [name.strip() for name in args.families.split(",") if name.strip()]
     unknown = sorted(set(families) - set(FAMILIES.values()))
@@ -304,7 +302,7 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("--root", required=True)
         command.add_argument("--manifest", required=name == "rh20t-extract",
                              help="a manifest whose datasets name the stage-1 directories")
-        command.add_argument("--out", help="default: <root>/prep_<corpus>/sidecars")
+        command.add_argument("--out", help="default: <root>/metadata/action_pretrain/sidecars")
         command.add_argument("--rh20t-work", help="default: <out>/_work/rh20t")
     build = commands.choices["build"]
     build.add_argument("--families", required=True)

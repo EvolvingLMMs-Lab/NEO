@@ -113,7 +113,7 @@
    "source": "robomind_tienkung"
   }
  ],
- "corpus": "gd7",
+ "corpus": "action_pretrain",
  "datasets": {
   "galaxea_owd/lerobot/Adjust_The_Air_Conditioner_Temperature_20250711_006": {
    "extrinsics": {
@@ -4312,7 +4312,7 @@
     "from": "published"
    },
    "gripper": {
-    "evidence": "embodiment_spec.json gripper_semantics (sha256 a083512313c4270c); first-row command at the high end in 100% of 40 sampled episodes",
+    "evidence": "embodiment_spec.json gripper_semantics; first-row command at the high end in 100% of 40 sampled episodes",
     "method": "declared",
     "range": [
      0.0,
@@ -4391,7 +4391,7 @@
     "from": "published"
    },
    "gripper": {
-    "evidence": "embodiment_spec.json gripper_semantics (sha256 a083512313c4270c); first-row command at the high end in 100% of 40 sampled episodes",
+    "evidence": "embodiment_spec.json gripper_semantics; first-row command at the high end in 100% of 40 sampled episodes",
     "method": "declared",
     "range": [
      0.0,
@@ -4470,7 +4470,7 @@
     "from": "published"
    },
    "gripper": {
-    "evidence": "embodiment_spec.json gripper_semantics (sha256 a083512313c4270c); first-row command at the high end in 100% of 40 sampled episodes",
+    "evidence": "embodiment_spec.json gripper_semantics; first-row command at the high end in 100% of 40 sampled episodes",
     "method": "declared",
     "range": [
      0.0,
@@ -4553,7 +4553,7 @@
     "from": "published"
    },
    "gripper": {
-    "evidence": "embodiment_spec.json gripper_semantics (sha256 a083512313c4270c); first-row command at the high end in 94.2% of 120 sampled episodes",
+    "evidence": "embodiment_spec.json gripper_semantics; first-row command at the high end in 94.2% of 120 sampled episodes",
     "method": "declared",
     "range": [
      0.0,
@@ -4612,7 +4612,7 @@
     "from": "published"
    },
    "gripper": {
-    "evidence": "embodiment_spec.json gripper_semantics (sha256 a083512313c4270c); first-row command at the high end in 100% of 40 sampled episodes",
+    "evidence": "embodiment_spec.json gripper_semantics; first-row command at the high end in 100% of 40 sampled episodes",
     "method": "declared",
     "range": [
      0.0,
@@ -4690,7 +4690,7 @@
     "from": "published"
    },
    "gripper": {
-    "evidence": "embodiment_spec.json gripper_semantics (sha256 a083512313c4270c)",
+    "evidence": "embodiment_spec.json gripper_semantics",
     "method": "masked",
     "semantics": "state_leakage"
    },
@@ -4769,7 +4769,7 @@
     "from": "published"
    },
    "gripper": {
-    "evidence": "embodiment_spec.json gripper_semantics (sha256 a083512313c4270c); first-row command at the high end in 100% of 160 sampled episodes",
+    "evidence": "embodiment_spec.json gripper_semantics; first-row command at the high end in 100% of 160 sampled episodes",
     "method": "declared",
     "range": [
      0.0,
@@ -4832,7 +4832,7 @@
     "from": "published"
    },
    "gripper": {
-    "evidence": "embodiment_spec.json gripper_semantics (sha256 a083512313c4270c); first-row command at the high end in 100% of 40 sampled episodes",
+    "evidence": "embodiment_spec.json gripper_semantics; first-row command at the high end in 100% of 40 sampled episodes",
     "method": "declared",
     "range": [
      0.0,
@@ -4895,7 +4895,7 @@
     "from": "published"
    },
    "gripper": {
-    "evidence": "embodiment_spec.json gripper_semantics (sha256 a083512313c4270c); first-row command at the high end in 100% of 40 sampled episodes",
+    "evidence": "embodiment_spec.json gripper_semantics; first-row command at the high end in 100% of 40 sampled episodes",
     "method": "declared",
     "range": [
      0.0,
@@ -4959,7 +4959,7 @@
     "from": "published"
    },
    "gripper": {
-    "evidence": "embodiment_spec.json gripper_semantics (sha256 a083512313c4270c); first-row command at the high end in 100% of 40 sampled episodes",
+    "evidence": "embodiment_spec.json gripper_semantics; first-row command at the high end in 100% of 40 sampled episodes",
     "method": "declared",
     "range": [
      0.0,
@@ -5216,7 +5216,7 @@
     "from": "published"
    },
    "gripper": {
-    "evidence": "embodiment_spec.json gripper_semantics (sha256 a083512313c4270c); first-row command at the high end in 95.8% of 120 sampled episodes",
+    "evidence": "embodiment_spec.json gripper_semantics; first-row command at the high end in 95.8% of 120 sampled episodes",
     "method": "declared",
     "range": [
      0.0,
@@ -5275,7 +5275,7 @@
     "from": "published"
    },
    "gripper": {
-    "evidence": "embodiment_spec.json gripper_semantics (sha256 a083512313c4270c); play data, first-row command high in 32.5% of 40 episodes (not a test)",
+    "evidence": "embodiment_spec.json gripper_semantics; play data, first-row command high in 32.5% of 40 episodes (not a test)",
     "method": "declared",
     "range": [
      0.0,
@@ -5334,7 +5334,7 @@
     "from": "published"
    },
    "gripper": {
-    "evidence": "embodiment_spec.json gripper_semantics (sha256 a083512313c4270c); first-row command at the high end in 95.8% of 120 sampled episodes",
+    "evidence": "embodiment_spec.json gripper_semantics; first-row command at the high end in 95.8% of 120 sampled episodes",
     "method": "declared",
     "range": [
      0.0,
@@ -5393,7 +5393,7 @@
     "from": "published"
    },
    "gripper": {
-    "evidence": "embodiment_spec.json gripper_semantics (sha256 a083512313c4270c); the action gripper is 1.0 on every sampled row",
+    "evidence": "embodiment_spec.json gripper_semantics; the action gripper is 1.0 on every sampled row",
     "method": "masked",
     "semantics": "constant_fabricated"
    },
@@ -5453,7 +5453,7 @@
     "from": "published"
    },
    "gripper": {
-    "evidence": "embodiment_spec.json gripper_semantics (sha256 a083512313c4270c); first-row command at the high end in 100% of 40 sampled episodes",
+    "evidence": "embodiment_spec.json gripper_semantics; first-row command at the high end in 100% of 40 sampled episodes",
     "method": "declared",
     "range": [
      0.0,
@@ -5532,7 +5532,7 @@
     "from": "published"
    },
    "gripper": {
-    "evidence": "embodiment_spec.json gripper_semantics (sha256 a083512313c4270c); first-row command at the high end in 100% of 40 sampled episodes",
+    "evidence": "embodiment_spec.json gripper_semantics; first-row command at the high end in 100% of 40 sampled episodes",
     "method": "declared",
     "range": [
      0.0,
@@ -5611,7 +5611,7 @@
     "from": "published"
    },
    "gripper": {
-    "evidence": "embodiment_spec.json gripper_semantics (sha256 a083512313c4270c); play data, first-row command high in 57.5% of 40 episodes (not a test)",
+    "evidence": "embodiment_spec.json gripper_semantics; play data, first-row command high in 57.5% of 40 episodes (not a test)",
     "method": "declared",
     "range": [
      0.0,
@@ -5690,7 +5690,7 @@
     "from": "published"
    },
    "gripper": {
-    "evidence": "embodiment_spec.json gripper_semantics (sha256 a083512313c4270c); first-row command at the high end in 100% of 40 sampled episodes",
+    "evidence": "embodiment_spec.json gripper_semantics; first-row command at the high end in 100% of 40 sampled episodes",
     "method": "declared",
     "range": [
      0.0,
@@ -5769,7 +5769,7 @@
     "from": "published"
    },
    "gripper": {
-    "evidence": "embodiment_spec.json gripper_semantics (sha256 a083512313c4270c); first-row command at the high end in 100% of 40 sampled episodes",
+    "evidence": "embodiment_spec.json gripper_semantics; first-row command at the high end in 100% of 40 sampled episodes",
     "method": "declared",
     "range": [
      0.0,
@@ -62621,9 +62621,8 @@
   }
  },
  "dropped_views": {
-  "manifest": "manifests/gd5_tokens_nobw.json",
-  "manifest_sha256": "75186c7c5dc74544cb605718509a464fa6b67f8ab32c02c312c3f47a2adcfc8f",
-  "payload_sha1": "e46512b7b59f336078cd233e92855ea49f6038db",
+  "manifest": "the previous build of this corpus's manifest",
+  "reason": "every removed view held one all-black payload",
   "views": {
    "bc_z_shard00of03": "observation.images.wrist_image",
    "bc_z_shard01of03": "observation.images.wrist_image",
@@ -62716,7 +62715,7 @@
  "excluded": {
   "galaxea_owd/lerobot/Put_The_Items_Into_The_Storage_Box_20250929_002_007": "schema C: robot_type r1pro, a second robot (two 7-DoF arms, 640x360 head, 640x480 wrists, gripper stroke 0..80) with 20 episodes, which cannot carry a normaliser key of its own; not converted",
   "oxe/berkeley_cable_routing": "action_unify_spec_asinh.json records its confidence as LOW-EXCLUDE-CANDIDATE and its translation provenance as documentary, so the factor was never measured well enough to train on. Measure it against the recording before porting it.",
-  "oxe/droid": "the earlier 2-camera DROID conversion (32 shards), replaced by oxe/droid3cam, the 3-camera re-conversion (41 shards) that gd6 reads through the droid3cam source block (frequency droid_nominal 15 Hz, key franka_panda, gripper continuous_width over [0, 1]). No v6 corpus reads these shards, so the layout keeps no entry for them",
+  "oxe/droid": "the earlier 2-camera DROID conversion (32 shards), replaced by oxe/droid3cam, the 3-camera re-conversion (41 shards) that this corpus reads through the droid3cam source block (frequency droid_nominal 15 Hz, key franka_panda, gripper continuous_width over [0, 1]). No v6 corpus reads these shards, so the layout keeps no entry for them",
   "oxe/furniture_bench_dataset_converted_externally_to_rlds": "action_unify_spec_asinh.json records its confidence as low and its translation provenance as empirical-weak-fit, so the factor was never measured well enough to train on. Measure it against the recording before porting it.",
   "oxe/iamlab_cmu_pickup_insert_converted_externally_to_rlds": "Its spec entry is mode diff_actions, not scale: the stored actions were audited as absolute poses and its trans_cm is one number rather than a per-axis factor. Held back until the convention is measured.",
   "oxe/iamlab_cmu_pickup_insert_converted_externally_to_rlds_unified": "The _unified suffix marks a different action convention from oxe/iamlab_cmu_pickup_insert_converted_externally_to_rlds, not a rename: measuring two of the three unified directories gave contradictory answers about whether their stored actions are deltas or absolute poses. action_unify_spec_asinh.json has no entry for this directory at all.",
@@ -62868,9 +62867,7 @@
    }
   ],
   "list": "tools/lists/rh20t_history_blocked_20260930.json",
-  "list_sha256": "b16c817e5ff36c5efac8810608f2d1ca8ce0a8ccfadffd05307d41a9292e79e1",
   "measured_by": "RH20T frozen-pose scan of the stage-1 corpus (pose_same per episode)",
-  "measured_sha256": "5da185723504bf152f1e13d79492d51b0514523f3f898b064d0c1b571f2f7770",
   "rule": "pose_same >= 0.9"
  },
  "newdata": {
@@ -62899,7 +62896,6 @@
    },
    "provenance": {
     "directories": "tools/ingest/robocoin/directories.tsv",
-    "directories_sha256": "f4a6ebcd32febf2e6f87acc107bf778e9fb7974bd1b8eac4af8c2945076d0159",
     "generator": "tools/ingest/sources/robocoin.py layout (python -m tools.ingest layout robocoin --write)",
     "survey": "$NEO_VLA_NEWDATA_ROOT/robocoin/"
    }
@@ -62911,7 +62907,6 @@
    },
    "provenance": {
     "directories": "tools/ingest/robocoin/directories.tsv",
-    "directories_sha256": "f4a6ebcd32febf2e6f87acc107bf778e9fb7974bd1b8eac4af8c2945076d0159",
     "generator": "tools/ingest/sources/robocoin_hands.py layout (python -m tools.ingest layout robocoin_hands --write)",
     "survey": "$NEO_VLA_NEWDATA_ROOT/robocoin/"
    }
@@ -62938,7 +62933,7 @@
   }
  },
  "provenance": {
-  "derived_from": "config/oxe3src_gd5.json at the corpus root, the layouts gd5_tokens was built from",
+  "derived_from": "the layout file of the previous build of this corpus",
   "drot_changes": [
    "stanford_hydra_dataset_converted_externally_to_rlds: unresolved -> spatial",
    "nyu_franka_play_dataset_converted_externally_to_rlds: unresolved -> euler_diff",
@@ -62950,8 +62945,7 @@
    "dlr_edan_shared_control_converted_externally_to_rlds: unresolved -> spatial"
   ],
   "generator": "tools/make_layout_v6.py",
-  "sha256": "7eca59d9d98596e67a2e441a0226a4b4791b6614b2c42cf0b95a059fd58903f8",
-  "supersedes": "sha256 d2dee7893532f5b1...): agibot frequency named no hz, so declare_frequency refused; fmb (24 dirs), still AgiBot dirs and 4 RH20T dirs declared no gripper semantics or stroke, so measure_gripper_polarity refused, and 36 AgiBot and RH20T directories took a stroke narrower than the hardware's from their own extremes; the OXE families without a state layout were labelled measured, which nothing can measure (the tool records them as declared)"
+  "supersedes": "the previous generation of this layout, in which agibot frequency named no hz, so declare_frequency refused; fmb (24 dirs), still AgiBot dirs and 4 RH20T dirs declared no gripper semantics or stroke, so measure_gripper_polarity refused, and 36 AgiBot and RH20T directories took a stroke narrower than the hardware's from their own extremes; the OXE families without a state layout were labelled measured, which nothing can measure (the tool records them as declared)"
  },
  "roots": {
   "env": {
@@ -63065,7 +63059,7 @@
      ]
     ],
     "applies_to": "the state 6D only, as R_base<-ee. R_c inside normalise_state; the mounted cameras, the drot conversion and the extrinsics keep the raw R",
-    "authority": "config/embodiments.yaml keys.agibot_g1.ee_frame_fix, which build_stats copies into the embodiments.json entry and its digest; restated here for the reader",
+    "authority": "config/embodiments.yaml keys.agibot_g1.ee_frame_fix, which build_stats copies into the embodiments.json entry; restated here for the reader",
     "evidence": "1b, 1f: AgiBot fingers close along EE x, DROID and LIBERO along EE y; Rz(+90 deg) puts image-right at EE -y as DROID and RH20T",
     "key": "agibot_g1",
     "rotation": "Rz(+90 deg)"
@@ -64051,7 +64045,7 @@
      ]
     ],
     "applies_to": "the state 6D only, as R_base<-ee. R_c inside normalise_state; the mounted cameras, the drot conversion and the extrinsics keep the raw R",
-    "authority": "config/embodiments.yaml keys.interndata_genie1.ee_frame_fix, which build_stats copies into the embodiments.json entry and its digest; restated here for the reader",
+    "authority": "config/embodiments.yaml keys.interndata_genie1.ee_frame_fix, which build_stats copies into the embodiments.json entry; restated here for the reader",
     "evidence": "genie1 approaches along EE +z (the TCP offset, checked on every episode) and closes along EE x (the stated wrist mounts' image x, 2026-10-01 check; the fingers separate along image x in the wrist frames); R_c puts approach on z and closing on y, the stage-1 convention of config/embodiments.yaml. The loader check gates it against tools/audit_ee_frame_conventions.py on every run.",
     "key": "interndata_genie1"
    },
@@ -64284,7 +64278,7 @@
      ]
     ],
     "applies_to": "the state 6D only, as R_base<-ee. R_c inside normalise_state; the mounted cameras, the drot conversion and the extrinsics keep the raw R",
-    "authority": "config/embodiments.yaml keys.interndata_lift2.ee_frame_fix, which build_stats copies into the embodiments.json entry and its digest; restated here for the reader",
+    "authority": "config/embodiments.yaml keys.interndata_lift2.ee_frame_fix, which build_stats copies into the embodiments.json entry; restated here for the reader",
     "evidence": "lift2 approaches along EE +x (the TCP offset, checked on every episode) and closes along EE y (the stated wrist mounts' image x, 2026-10-01 check; the fingers separate along image x in the wrist frames); R_c puts approach on z and closing on y, the stage-1 convention of config/embodiments.yaml. The loader check gates it against tools/audit_ee_frame_conventions.py on every run.",
     "key": "interndata_lift2"
    },
@@ -64509,7 +64503,7 @@
      ]
     ],
     "applies_to": "the state 6D only, as R_base<-ee. R_c inside normalise_state; the mounted cameras, the drot conversion and the extrinsics keep the raw R",
-    "authority": "config/embodiments.yaml keys.interndata_split_aloha.ee_frame_fix, which build_stats copies into the embodiments.json entry and its digest; restated here for the reader",
+    "authority": "config/embodiments.yaml keys.interndata_split_aloha.ee_frame_fix, which build_stats copies into the embodiments.json entry; restated here for the reader",
     "evidence": "split_aloha approaches along EE +z (the TCP offset, checked on every episode) and closes along EE x (the stated wrist mounts' image x, 2026-10-01 check; the fingers separate along image x in the wrist frames); R_c puts approach on z and closing on y, the stage-1 convention of config/embodiments.yaml. The loader check gates it against tools/audit_ee_frame_conventions.py on every run.",
     "key": "interndata_split_aloha"
    },

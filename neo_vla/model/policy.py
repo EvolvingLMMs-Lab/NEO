@@ -33,7 +33,6 @@ from ..data.images import (
     check_saved_convention,
 )
 from ..data.images import TILE_STAMP as TILE_RULE
-from ..engine.checkpoint import file_digest
 from ..engine.context import StepContext
 from ..engine.loop import PACK_COUNTER_OUTPUT
 from ..engine.hostcopy import host_of, to_host_device
@@ -428,8 +427,8 @@ class NeoVlaPolicy(nn.Module):
     def checkpoint_meta(self) -> dict:
         """What checkpoint.save writes into meta.json beside the step.
 
-        The pixel convention, the prefix layout, the digest of the embodiments
-        file written beside it with each key's entry digest, the state, action,
+        The pixel convention, the prefix layout, the keys of the embodiments
+        file written beside it, the state, action,
         body, history and tile stamps, the prefix geometry the encoder was
         built with, and the suffix layout (decoder.SUFFIX_LAYOUT). A resume, an
         init_from and a serving load hold each of them against this build
@@ -439,10 +438,7 @@ class NeoVlaPolicy(nn.Module):
         meta = {
             CONVENTION_META_KEY: self.encoder.pixel_convention,
             PREFIX_LAYOUT_KEY: constants.PREFIX_LAYOUT,
-            EMBODIMENTS_KEY: {
-                "digest": file_digest(embodiments.dumps()),
-                "keys": {key: entry.digest for key, entry in sorted(embodiments.entries.items())},
-            },
+            EMBODIMENTS_KEY: embodiments.meta(),
         }
         meta.update({key: dict(stamp) for key, stamp in RECORD_STAMPS})
         meta[PREFIX_KEY] = self.encoder.layout_stamp()
@@ -454,37 +450,37 @@ class NeoVlaPolicy(nn.Module):
 
         Called before a resume, an init_from and a serving load read the
         weights, so a mismatch costs a json read and not minutes of torch.load:
-        the pixel convention, then R11 on a prefix layout other than v7, R1 on a
+        the pixel convention, then R11 on a prefix layout other than this one, R1 on a
         meta that names no embodiments file, R22 on a state, action, body,
         history or tile stamp other than this tree's, R22 on a prefix stamp other than this
-        build's (review train-eval-safety m5: n_views, max_grid, the text budget
-        and the tokenizer make no parameter, so the strict load cannot see them),
+        build's (n_views, max_grid, the text budget and the tokenizer make no
+        parameter, so the strict load cannot see them),
         and R22 on a suffix layout other than SUFFIX_LAYOUT: a v1 step (pre
         tokens, 96 at K 30) holds the very tensors v2 reads, under the same
         names and shapes, so only this stamp tells them apart.
-        The file's own digest (R1, R2) is held by
+        The file itself and its keys (R1, R2) are held by
         checkpoint.check_embodiments_file, which has the directory.
         """
         check_saved_convention(meta, self.encoder.pixel_convention, where)
         meta = meta or {}
         layout = meta.get(PREFIX_LAYOUT_KEY)
-        if layout != constants.PREFIX_LAYOUT:
+        if layout is None or constants.prefix_layout_of(layout) != constants.PREFIX_LAYOUT:
             old = (f" ({layout!r} is a retired layout)"
                    if layout in constants.OLD_PREFIX_LAYOUTS else "")
             raise ValueError(
                 f"{constants.refusal_prefix(11)} {where} states prefix layout {layout!r}{old}.\n"
-                f"Expected {constants.PREFIX_LAYOUT!r}: this tree reads the v7 prefix (six "
+                f"Expected {constants.PREFIX_LAYOUT!r}: this tree reads the native prefix (six "
                 "<state> columns after the instruction, the body's among them; an Earlier "
                 "and a Now block; no <scale>).\n"
                 "Serve or continue an older checkpoint with the tree that wrote it."
             )
         stated = meta.get(EMBODIMENTS_KEY)
-        if not isinstance(stated, dict) or not {"digest", "keys"} <= set(stated):
+        if not isinstance(stated, dict) or "keys" not in stated:
             raise ValueError(
                 f"{constants.refusal_prefix(1)} {where} names no embodiments file in "
                 "meta.json.\n"
-                f"Expected meta.{EMBODIMENTS_KEY} with a digest and each key's entry digest, "
-                f"beside {constants.EMBODIMENTS_FILE}.\n"
+                f"Expected meta.{EMBODIMENTS_KEY} with the keys of the "
+                f"{constants.EMBODIMENTS_FILE} beside it.\n"
                 "Name a step written by this tree; a step without its normaliser cannot "
                 "be trained from or served."
             )
@@ -498,12 +494,20 @@ class NeoVlaPolicy(nn.Module):
                 )
         built = self.encoder.layout_stamp()
         stated = meta.get(PREFIX_KEY)
+        if isinstance(stated, dict):
+            # An older step states the scaffold and tokenizer ids as checksum
+            # strings; those two are not compared, every number still is.
+            legacy = {key for key in ("scaffold", "tokenizer") if isinstance(stated.get(key), str)}
+            built = {key: value for key, value in built.items() if key not in legacy}
+            stated = {key: value for key, value in stated.items() if key not in legacy}
         if stated != built:
             differ = sorted(key for key in built
                             if not isinstance(stated, dict) or stated.get(key) != built[key])
+            numbers = {key: (stated.get(key) if isinstance(stated, dict) else None, built[key])
+                       for key in differ if key not in ("scaffold", "tokenizer")}
             raise ValueError(
-                f"{constants.refusal_prefix(22)} {where} states prefix {stated!r}; this build "
-                f"lays down {built!r} (differs in {differ}).\n"
+                f"{constants.refusal_prefix(22)} {where} states a prefix that differs from "
+                f"this build's in {differ} (stated, built: {numbers}).\n"
                 "Expected the prefix the step was trained under: n_views, max_grid, "
                 "max_text_tokens, the tower's pixels per token and the tokenizer make no "
                 "parameter, so a strict load would serve the step on other columns.\n"
@@ -518,10 +522,10 @@ class NeoVlaPolicy(nn.Module):
         Three holds. The frames resize under the model's pixel convention. A
         chat corpus renders NEO's own rows. And the dataset's
         normaliser agrees with policy.embodiments key by key: every entry the
-        dataset normalises through has the digest this policy's file gives it
+        dataset normalises through has the identity this policy's file gives it
         (R8), because the targets and the state were normalised by the one and
-        the checkpoint will be served by the other. The file digests differ
-        once the run fills the trained section, so the entries are compared. A
+        the checkpoint will be served by the other. The files differ once the
+        run fills the trained section, so the entries are compared. A
         dataset that states no file (targets_only, or not a RobotDataset) is
         refused: it could not have normalised what this model trains on.
         """
@@ -561,16 +565,19 @@ class NeoVlaPolicy(nn.Module):
                 "normalised through, to hold against the policy's.\n"
                 "Build the dataset in train mode with data.train.normaliser set."
             )
+        from ..data.embodiment import identity_differs
+
         own = self.require_embodiments("the dataset check").entries
         for key, entry in sorted(normaliser.entries.items()):
             held = own.get(key)
-            if held is None or held.digest != entry.digest:
+            if held is None or held.identity != entry.identity:
+                differ = "no such key" if held is None else (
+                    f"an entry differing in {identity_differs(held.identity, entry.identity)}")
                 raise ValueError(
                     f"{constants.refusal_prefix(8)} the dataset normalises {key!r} through "
-                    f"entry {entry.digest}; the policy holds "
-                    f"{'no such key' if held is None else held.digest}.\n"
+                    f"an entry the policy does not hold; the policy holds {differ}.\n"
                     "Expected one entry per key for the loader, the checkpoint and the "
-                    "server: the numbers and the clause are in the digest.\n"
+                    "server: the numbers and the clause are in the identity.\n"
                     "Point data.train.normaliser at the file the policy was given."
                 )
 
@@ -740,7 +747,7 @@ class NeoVlaPolicy(nn.Module):
             )
 
     def check_body(self, batch: dict, *, train: bool) -> None:
-        """Raise unless the body's masks agree with its code (review v7spec, consistency).
+        """Raise unless the body's masks agree with its code.
 
         One source of truth: body_state_code. A key without a body is ABSENT in
         both roles, and then body_dim_valid is all False and, in training,

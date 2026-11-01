@@ -67,7 +67,7 @@ def validate_manifest_prompts(document: dict) -> int:
 
     A manifest need not repeat the canonical clauses. If it does, each supplied
     field is an assertion, including unused frame clauses and per-episode keys.
-    The check is independent of the manifest's claimed template or digest.
+    The check is independent of the manifest's claimed template or version.
     """
     redundant = 0
     for entry in document.get("datasets", []):

@@ -148,14 +148,16 @@ SIDECAR_STAMP_KEY = b"neo_vla_sidecar"
 # layout or an older writer, refused by name.
 SIDECAR_FORMAT = "neo_vla_sidecar_v1"
 SIDECAR_TOOL_VERSION = "2.0.0"
+# The fields of a sidecar's stamp the cache stage copies into the arrow: what
+# the sidecar writer states (tools/sidecars/common.stamp_of and write_built).
+SIDECAR_STAMP_FIELDS = ("format", "ingest_layout", "tool", "tool_version", "stamps", "entry",
+                        "directory", "source", "family", "arms", "rows", "episodes",
+                        "episode_rows", "columns", "column_order", "checks", "git_commit",
+                        "source_root")
 
 # The ingest stamp's fields, as the v7 writer states them in meta/info.json.
 INGEST_STAMP = {INGEST_LAYOUT_FIELD: INGEST_LAYOUT, "action_record": ACTION_RECORD,
                 "state_record": STATE_RECORD, "body_record": BODY_RECORD}
-
-# The sidecar fields a manifest pins, so a cache merged from a sidecar that
-# was rebuilt since the manifest was written is refused as stale.
-SIDECAR_PINS = ("source_sha256", "episode_starts_sha256")
 
 
 @dataclass(frozen=True)
@@ -165,14 +167,11 @@ class StoredParts:
     columns  column name -> values per row (arms x 7, arms x 12, or 8)
     origin   a member of PART_ORIGINS
     entry    the manifest entry's name, which a sidecar's stamp names too
-    pins     for a sidecar, the SIDECAR_PINS values the manifest states;
-             None for an ingest output
     """
 
     columns: dict[str, int]
     origin: str
     entry: str
-    pins: dict[str, str] | None = None
 
     def __post_init__(self) -> None:
         unknown = sorted(set(self.columns) - set(PART_COLUMNS))
@@ -187,14 +186,6 @@ class StoredParts:
                 f"directory {self.entry!r} states its stored columns came from "
                 f"{self.origin!r}.\nExpected one of {PART_ORIGINS}.\n"
                 "A sidecar entry names its sidecar; every other directory is an ingest output."
-            )
-        pinned = self.pins is not None and sorted(self.pins) == sorted(SIDECAR_PINS) \
-            and all(isinstance(value, str) and value for value in self.pins.values())
-        if (self.origin == "sidecar") != pinned or (self.origin == "ingest") != (self.pins is None):
-            raise ValueError(
-                f"directory {self.entry!r} has origin {self.origin!r} and pins {self.pins!r}.\n"
-                f"Expected the sidecar's {list(SIDECAR_PINS)} for a sidecar, and none for "
-                "an ingest output.\nRebuild the manifest with this tree's manifest stage."
             )
         for name, width in self.columns.items():
             if isinstance(width, bool) or not isinstance(width, int) or width < 1:
@@ -249,10 +240,9 @@ def check_sidecar_stamp(table: pa.Table, parts: StoredParts, where: str) -> dict
 
     The stamp is the sidecar's footer, carried into the arrow by the cache
     stage. It must name this format, the v7 ingest layout, this writer's
-    version, the three record stamps and this entry; it must have written
-    every column the layouts read; and its source and boundary digests must be
-    the ones the manifest pins, else the cache was merged from a sidecar the
-    manifest no longer names (stale).
+    version, the three record stamps and this entry; and it must have written
+    every column the layouts read. Its episodes and rows are held to the
+    cache's by check_sidecar_episodes.
     """
     stamp = _metadata_stamp(table, SIDECAR_STAMP_KEY, where)
     layout = stamp.get("ingest_layout")
@@ -271,12 +261,6 @@ def check_sidecar_stamp(table: pa.Table, parts: StoredParts, where: str) -> dict
     if missing:
         raise _refuse_stamp(where, f"reads {missing} and its sidecar wrote "
                                    f"{sorted(written)}", "every column the layouts read")
-    for pin in SIDECAR_PINS:
-        if stamp.get(pin) != parts.pins.get(pin):
-            raise _refuse_stamp(where, f"was merged from a sidecar whose {pin} is "
-                                       f"{stamp.get(pin)!r} and the manifest pins "
-                                       f"{parts.pins.get(pin)!r} (a stale sidecar)",
-                                "the sidecar the manifest names")
     return stamp
 
 

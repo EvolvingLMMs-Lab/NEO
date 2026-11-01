@@ -1,5 +1,5 @@
 defaults:
-  - gd7
+  - action_pretrain
   - _self_
 
 # flow loss + 0.1 x chat loss, every step: one COCO ShareGPT row per robot row.
@@ -7,7 +7,7 @@ cotrain_weight: 0.1
 
 train:
   epoch_samples: 614400000                  # 75,000 steps x 8,192 robot rows
-  sampling: rows                            # gd7's, stated
+  sampling: rows                            # action_pretrain's, stated
   understanding:
     _target_: neo_vla.data.understanding.ShareGPT4VCoco
     chat_format: neo_native

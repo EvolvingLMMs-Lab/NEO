@@ -19,8 +19,7 @@ from dataclasses import dataclass
 
 from .template import SECTION_HEADERS, Template, frequency_text
 
-# Clauses dropped when the rendered text does not fit: none. Version 5 dropped
-# the frame clause, then the embodiment; under version 6 the frequency, the
+# Clauses dropped when the rendered text does not fit: none. The frequency, the
 # embodiment and the frame all name what the actions mean, so an over-budget
 # record is refused at the cache build instead.
 DROP_ORDER: tuple[str, ...] = ()
@@ -61,7 +60,7 @@ class Rendered:
           same for every episode of a directory and frame, which is what the
           checkpoint's trained prompt heads list
     task  the instruction as rendered
-    tail  everything after the task; empty under version 6
+    tail  everything after the task; empty under this template
     """
 
     text: str
@@ -82,7 +81,7 @@ def _joined(current: str, clause: str) -> str:
 def _check_clauses(context: RenderContext) -> None:
     """Raise unless section 3 has its embodiment clause and its frame clause.
 
-    Version 6 drops no clause, so an empty one is never a shorter prompt that
+    No clause is dropped, so an empty one is never a shorter prompt that
     is still right: it is a head without the sentence that names the sample's
     normaliser or its frame, which can then equal another key's or another
     frame's head.
@@ -91,8 +90,8 @@ def _check_clauses(context: RenderContext) -> None:
     if not clauses or any(not str(clause).strip() for clause in clauses):
         raise ValueError(
             f"the sample's embodiment clauses are {list(clauses)!r}.\n"
-            "Expected at least one embodiment clause, none of them empty: version 6 drops "
-            "no clause, and the clause names the embodiment key.\n"
+            "Expected at least one embodiment clause, none of them empty: no clause is "
+            "dropped, and the clause names the embodiment key.\n"
             "Give the key's clause from config/embodiments.yaml."
         )
     if not str(context.frame_clause).strip():
@@ -112,8 +111,7 @@ def render(template: Template, context: RenderContext) -> Rendered:
     newline gives the same text through every producer (the cache build, the
     eval frames, the server's clients), and the encoder refuses a prompt that
     ends in whitespace. Leading whitespace is kept: real records open with a
-    newline (the gd5 cache's longest, utaustin_mutex position 57), and v6 is
-    the frequency line plus the v5 text byte for byte.
+    newline (utaustin_mutex position 57, among others).
 
     Raises for an empty task, an empty embodiment or frame clause, and a
     frequency frequency_text refuses. The result still has to pass fit before
@@ -206,7 +204,7 @@ def fit(
         raise ValueError(
             f"the rendered text of {record} is {length} tokens against a budget of "
             f"{max_text_tokens}.\n"
-            "Expected every record to fit whole: version 6 drops no clause.\n"
+            "Expected every record to fit whole: no clause is dropped.\n"
             "Shorten the instruction in the manifest, or raise model.prefix.max_text_tokens "
             "(which widens the prefix and needs a new pretrain)."
         )

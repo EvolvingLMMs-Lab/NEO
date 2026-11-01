@@ -92,7 +92,6 @@ def build(entry: dict[str, Any], directory: Path) -> dict[str, Any]:
     columns = common.empty_columns(total, ARMS, command=False)
     episode_column = np.empty(total, dtype=np.int64)
     frame_column = np.empty(total, dtype=np.int64)
-    digest = common.SourceDigest()
     checks = {"episodes": len(episodes), "joint_rows": 0, "implausible_written_nan": 0}
     read = [JOINT_COLUMN, common.FRAME_COLUMN] if recorded else [common.FRAME_COLUMN]
     start = 0
@@ -109,8 +108,6 @@ def build(entry: dict[str, Any], directory: Path) -> dict[str, Any]:
                     f"{episode.data_file} {JOINT_COLUMN} has shape {list(values.shape)}\n"
                     f"expected [rows, {JOINTS}], libero_franka_sim's joints\n"
                     "check the directory's joint column")
-            digest.text(str(episode.index))
-            digest.array(values)
             joints = common.finite(values)
             implausible = common.implausible_joints(joints)
             joints[implausible] = np.nan
@@ -118,8 +115,6 @@ def build(entry: dict[str, Any], directory: Path) -> dict[str, Any]:
             checks["implausible_written_nan"] += int(implausible.sum())
             checks["joint_rows"] += int(np.isfinite(joints).any(axis=1).sum())
         start = stop
-    if not recorded:
-        digest.text("no joint source (D18)")
     return {"episodes": episodes, "columns": columns, "episode_column": episode_column,
             "frame_column": frame_column, "described": described(recorded), "arms": ARMS,
-            "source_digest": digest.hexdigest(), "checks": checks}
+            "checks": checks}

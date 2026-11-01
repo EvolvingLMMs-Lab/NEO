@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass
 
 # Permanent. A new corpus takes the next number; a number is never reused.
-# 7-17 are the five datasets added for the gd7 stage-1 corpus, one per source
+# 7-17 are the five datasets added for the action-pretraining corpus, one per source
 # word their layouts state.
 SOURCE_IDS: dict[str, int] = {"oxe": 0, "agibot": 1, "rh20t": 2, "libero": 3,
                               "droid3cam": 4, "pika": 5, "robotwin2": 6,

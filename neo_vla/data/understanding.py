@@ -864,7 +864,8 @@ def check_no_pack(**stated) -> None:
             f"ShareGPT4V-COCO is given {packed}.\n"
             "Expected pack_tokens, pack_micro_batches and force_pack null: this corpus is "
             "one chat row per robot row, never a pack.\n"
-            "State them null in the group (config/data/*_cotrain_cocogptshare.yaml)."
+            "State them null in the group (config/data/action_pretrain_cotrain.yaml, "
+            "robot_adaptation.yaml)."
         )
 
 

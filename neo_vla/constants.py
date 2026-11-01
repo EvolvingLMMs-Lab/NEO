@@ -16,7 +16,10 @@ from __future__ import annotations
 # The prefix layout and the formats that carry it. A checkpoint, a prompt cache,
 # a manifest and an embodiments file each state one of these, and a reader
 # refuses any other, naming the old value when it is one of the OLD_ tables.
-PREFIX_LAYOUT = "v7"
+# PREFIX_LAYOUT_ALIASES are earlier labels of this same layout, which files and
+# checkpoints written before the label was settled still state.
+PREFIX_LAYOUT = "native"
+PREFIX_LAYOUT_ALIASES = ("v7",)
 OLD_PREFIX_LAYOUTS = ("v6",)
 CHECKPOINT_FORMAT = "neo_vla_step_v4"
 OLD_CHECKPOINT_FORMATS = ("neo_vla_step_v1", "neo_vla_step_v2", "neo_vla_step_v3")
@@ -28,20 +31,21 @@ EMBODIMENT_KEYS_SCHEMA = "neo_vla_embodiment_keys_v2"
 OLD_EMBODIMENT_KEYS_SCHEMAS = ("neo_vla_embodiment_keys_v1",)
 MANIFEST_SCHEMA_VERSION = 3
 OLD_MANIFEST_SCHEMA_VERSIONS = (1, 2)
-TEMPLATE_MAJOR = 7
-OLD_TEMPLATE_MAJORS = (4, 5, 6)
 
-# The stage-1 corpus and its data group (stage 2 reads the same corpus).
-STAGE1_CORPUS = "gd7_tokens_nobw"
-STAGE1_DATA_GROUP = "gd7"
-OLD_CORPORA = ("gd6_tokens_nobw",)
-OLD_DATA_GROUPS = ("gd6",)
+# The action-pretraining corpus (stages 1 and 2 read it), and where every
+# corpus keeps its files under the data root: the manifest at
+# manifests/<corpus>.json, the stage records, normaliser and sidecars under
+# METADATA_DIR/<corpus>, the numeric, frame, camera and prompt caches under
+# PROCESSED_DIR/<corpus>.
+PRETRAIN_CORPUS = "action_pretrain"
+METADATA_DIR = "metadata"
+PROCESSED_DIR = "processed"
 
 # The stored v7 columns, one spelling for the new-data parquet and the stage-1
 # sidecars alike; NaN means not recorded, never 0. A command column exists only
 # where a family's target is its command (DROID joints, Galaxea base). An ingest
 # output states INGEST_LAYOUT under INGEST_LAYOUT_FIELD in meta/info.json, and a
-# sidecar lives at prep_<corpus>/SIDECAR_DIR/<entry name>.parquet.
+# sidecar lives at METADATA_DIR/<corpus>/SIDECAR_DIR/<entry name>.parquet.
 INGEST_LAYOUT = "v7"
 INGEST_LAYOUT_FIELD = "ingest_layout"
 COLUMN_JOINTS = "observation.joints"
@@ -206,9 +210,9 @@ RETIRED_BATCH_KEYS = {
 # test and a log search find it by its number.
 REFUSALS = {
     1: "missing_embodiments_file",
-    2: "embodiments_digest_mismatch",
+    2: "embodiments_mismatch",
     3: "unknown_embodiment_key",
-    4: "record_digest_mismatch",
+    4: "record_mismatch",
     5: "two_stage_conflict",
     6: "retired_field",
     7: "untrained_prompt_head",
@@ -230,6 +234,13 @@ REFUSALS = {
     23: "embodiment_missing",
     24: "unknown_request_field",
 }
+
+
+def prefix_layout_of(stated) -> str:
+    """A prefix-layout label as read from a file or checkpoint, earlier labels of
+    this layout read as PREFIX_LAYOUT and any other value returned as stated."""
+    stated = str(stated)
+    return PREFIX_LAYOUT if stated in PREFIX_LAYOUT_ALIASES else stated
 
 
 def refusal_prefix(number: int) -> str:

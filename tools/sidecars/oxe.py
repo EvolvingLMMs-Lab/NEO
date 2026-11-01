@@ -70,7 +70,6 @@ def build(entry: dict[str, Any], directory: Path) -> dict[str, Any]:
     columns = common.empty_columns(total, ARMS, command=False)
     episode_column = np.empty(total, dtype=np.int64)
     frame_column = np.empty(total, dtype=np.int64)
-    digest = common.SourceDigest()
     checks = {"episodes": len(episodes), "zero_rows_written_nan": 0}
     read = ["observation.state", common.FRAME_COLUMN] if count else [common.FRAME_COLUMN]
     start = 0
@@ -81,14 +80,10 @@ def build(entry: dict[str, Any], directory: Path) -> dict[str, Any]:
         frame_column[start:stop] = table.column(common.FRAME_COLUMN).to_numpy()
         if count:
             state = np.stack(table.column("observation.state").to_numpy(zero_copy_only=False))
-            digest.text(str(episode.index))
-            digest.array(state[:, :count])
             joints, missing = joint_rows(state, count)
             columns[common.COLUMN_JOINTS][start:stop] = common.finite(joints)
             checks["zero_rows_written_nan"] += missing
         start = stop
-    if not count:
-        digest.text("no joint source")
     return {"episodes": episodes, "columns": columns, "episode_column": episode_column,
             "frame_column": frame_column, "described": described(name), "arms": ARMS,
-            "source_digest": digest.hexdigest(), "checks": checks}
+            "checks": checks}

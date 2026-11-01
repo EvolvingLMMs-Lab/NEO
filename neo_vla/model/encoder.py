@@ -16,8 +16,6 @@ encoder is never wrapped in torch.no_grad.
 """
 from __future__ import annotations
 
-import hashlib
-import json
 import logging
 from pathlib import Path
 
@@ -438,7 +436,7 @@ class PrefixEncoder(nn.Module):
         self.chat_relief = dict.fromkeys(chat_pack.RELIEF_FLAGS, False)
         self.build_scaffold()
         logger.info(
-            "v7 prefix: Earlier and Now blocks of %d views of %d columns, %d "
+            "native prefix: Earlier and Now blocks of %d views of %d columns, %d "
             "calibration and %d rotation columns each, "
             "%d instruction tokens, %d state columns, Lp %d (%d before the text, "
             "%d after), intrinsics %s",
@@ -588,7 +586,7 @@ class PrefixEncoder(nn.Module):
             raise ValueError(
                 f"the prompt does not open with the frequency section: {str(prompt)[:60]!r}.\n"
                 f"Expected a template v7 rendering, which starts {FREQUENCY_OPEN!r}.\n"
-                "Re-render the prompt cache and the eval frames under neo_v7.yaml."
+                "Re-render the prompt cache and the eval frames under policy.yaml."
             )
         if prompt != prompt.rstrip():
             raise ValueError(
@@ -681,14 +679,10 @@ class PrefixEncoder(nn.Module):
         tokenizer create no parameter, so a strict load would take a step built
         under one prefix into a build of another (a --config override, a run
         config rewritten on relaunch) and serve it on other columns and another
-        token grid. The numbers, Lp, a digest of the scaffold ids and a digest
-        of the ids the tokenizer gives TOKENIZER_PROBE_TEXTS; JSON types only,
-        so the stamp read back from meta.json compares equal.
+        token grid. The numbers, Lp, the scaffold ids and the ids the tokenizer
+        gives TOKENIZER_PROBE_TEXTS; JSON types only, so the stamp read back
+        from meta.json compares equal.
         """
-        def digest(value) -> str:
-            text = json.dumps(value, ensure_ascii=True, separators=(",", ":"))
-            return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
-
         return {
             "n_views": self.n_views,
             "n_slots": self.n_slots,
@@ -696,8 +690,9 @@ class PrefixEncoder(nn.Module):
             "max_text_tokens": self.max_text_tokens,
             "pixels_per_token": int(self.vision.pixels_per_token),
             "prefix_len": int(self.prefix_len),
-            "scaffold": digest([self.pre_ids, self.post_ids]),
-            "tokenizer": digest([[text, self.text_ids(text)] for text in TOKENIZER_PROBE_TEXTS]),
+            "scaffold": [[int(i) for i in self.pre_ids], [int(i) for i in self.post_ids]],
+            "tokenizer": [[text, [int(i) for i in self.text_ids(text)]]
+                          for text in TOKENIZER_PROBE_TEXTS],
         }
 
     @property

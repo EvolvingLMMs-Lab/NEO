@@ -1,4 +1,4 @@
-"""The one normaliser (v7): bounds per (key, slot, dim), the file holding them, its digests.
+"""The one normaliser (v7): bounds per (key, slot, dim), the file holding them, its identities.
 
 embodiments.json (neo_vla_embodiments_v2) states per embodiment key the arm
 joints and hand it declares; per action slot the weighted q01 and q99 of each
@@ -12,12 +12,11 @@ the tools normalise through the functions here and through nothing else.
 
 Module scope imports the standard library, numpy and neo_vla.constants only, so
 an eval client in a simulator environment with no torch can read the file and
-call gripper_raw and record_digest; the tensor functions import torch inside.
+call gripper_raw and record_inputs; the tensor functions import torch inside.
 """
 from __future__ import annotations
 
 import copy
-import hashlib
 import json
 import logging
 import math
@@ -63,7 +62,8 @@ __all__ = [
     "DIM_NAMES", "STATE_DIM_NAMES", "BODY_DIM_NAMES", "STATE_RANGE", "ACTION_GROUPS",
     "BODY_GROUPS", "FIT_FIELDS", "BASE_SOURCES", "BASE_MOTION", "BASE_SCALE_FLOOR", "Entry",
     "BodyEntry", "DatasetRecord", "Embodiments", "FitReport", "RefusalKeyError",
-    "canonical_json", "entry_digest", "record_digest", "record_from_manifest", "file_digest",
+    "entry_identity", "identity_differs", "record_inputs", "record_from_manifest",
+    "without_checksums",
     "header_of", "normalise_actions", "denormalise", "normalise_state", "canonical_gripper",
     "gripper_raw", "fit_check", "require_fit", "DROT_RECORD", "UNTRAINED_DROT",
     "normalise_body_actions", "denormalise_body", "normalise_body_state", "fit_check_body",
@@ -190,7 +190,7 @@ FIT_FLAGGED_MAX = 0.01
 FRAME_FIX_TOLERANCE = 1e-6
 
 # The six datasets-record fields a client recomputes from its own manifest, and
-# so the only ones the record digest covers.
+# so the only ones a record's inputs compare.
 RECORD_FIELDS = ("embodiment", "keys", "slots", "gripper", "unit_factors", "control_hz")
 PER_EPISODE = "per_episode"
 
@@ -217,24 +217,12 @@ class RefusalKeyError(KeyError):
         return str(self.args[0]) if self.args else ""
 
 
-def canonical_json(value: Any) -> bytes:
-    """The byte form every digest here hashes: sorted keys, no spaces, no NaN."""
-    return json.dumps(
-        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
-    ).encode("utf-8")
-
-
-def file_digest(data: bytes) -> str:
-    """The digest of a file's bytes, as every stamp spells it."""
-    return "sha256:" + hashlib.sha256(data).hexdigest()
-
-
 def _as_float(value: Any) -> Any:
-    """Every number of a document as a float, so 1 and 1.0 hash alike.
+    """Every number of a document as a float, so 1 and 1.0 compare alike.
 
-    A digest is compared across writers (the stats tool, the runner, a test),
-    and json keeps the int-or-float spelling each of them used, so a digest
-    over the raw spelling would refuse two equal files.
+    An identity is compared across writers (the stats tool, the runner, a test),
+    and json keeps the int-or-float spelling each of them used, so a comparison
+    of the raw spelling would refuse two equal files.
     """
     if isinstance(value, bool) or value is None or isinstance(value, str):
         return value
@@ -245,17 +233,17 @@ def _as_float(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [_as_float(item) for item in value]
     raise TypeError(
-        f"a digest was asked to hash a {type(value).__name__}.\n"
+        f"an identity was asked to hold a {type(value).__name__}.\n"
         "Expected json values: numbers, strings, booleans, null, lists and objects.\n"
-        "Convert the value to json before hashing it."
+        "Convert the value to json before comparing it."
     )
 
 
 def header_of(alpha: float) -> dict:
-    """The normaliser header tools/build_stats.py writes and every entry digest covers.
+    """The normaliser header tools/build_stats.py writes and every entry identity holds.
 
     The rule fields (CHECKED_HEADER) are what the reader holds a file to; the
-    prose fields say the same in words and are covered by the digest only.
+    prose fields say the same in words and are compared through the identity only.
     """
     return {
         "transform": TRANSFORM,
@@ -290,18 +278,20 @@ def header_of(alpha: float) -> dict:
 CHECKED_HEADER = ("transform", "quantiles", "base_transform", "base_motion", "base_floor",
                   "out_of_band", "groups", "layout")
 
-# The fields an entry digest covers (and every v2 entry states).
+# The fields an entry identity holds (and every v2 entry states).
 ENTRY_FIELDS = ("slots", "joints", "hand", "action", "state", "body", "ee_frame_fix", "clause")
 ACTION_FIELDS = ("low", "high", "constant", "absent", "mask", "gripper_valid")
 
 
-def entry_digest(entry_document: dict, header: dict) -> str:
-    """One entry's digest: its numbers, its declarations, its clause and the normaliser header.
+def entry_identity(entry_document: dict, header: dict) -> dict:
+    """One entry's identity: its numbers, declarations, clause and the normaliser header.
 
-    reference, stage, fit, action.from, action.from_groups and the digest itself
-    are provenance and stay out, so an identical rebuild keeps the digest and an
-    alpha, clause, joint, hand or body change moves it. An entry missing a field
-    (a v6 one has no joints, hand or body) is refused naming the fields.
+    The values themselves, numbers as floats, compared with ==. reference,
+    stage, fit, action.from and action.from_groups are provenance and stay out,
+    so an identical rebuild keeps the identity and an alpha, clause, joint, hand
+    or body change moves it. A digest field an older writer stored is not read.
+    An entry missing a field (a v6 one has no joints, hand or body) is refused
+    naming the fields.
     """
     for where, document, names in (
             ("an embodiments entry", entry_document, ENTRY_FIELDS),
@@ -327,11 +317,17 @@ def entry_digest(entry_document: dict, header: dict) -> str:
         "clause": entry_document["clause"],
         "normaliser": header,
     }
-    return file_digest(canonical_json(_as_float(view)))
+    return _as_float(view)
 
 
-def record_digest(record_document: dict) -> str:
-    """The digest of a datasets record's six client-input fields and no others."""
+def identity_differs(found: dict, wanted: dict) -> list[str]:
+    """The top-level fields of two identities that disagree, for a refusal to name."""
+    return sorted(name for name in set(found) | set(wanted)
+                  if found.get(name) != wanted.get(name))
+
+
+def record_inputs(record_document: dict) -> dict:
+    """A datasets record's six client-input fields and no others, numbers as floats."""
     missing = [name for name in RECORD_FIELDS if name not in record_document]
     if missing:
         raise ValueError(
@@ -339,15 +335,14 @@ def record_digest(record_document: dict) -> str:
             f"Expected all of {list(RECORD_FIELDS)}.\n"
             "Build the record with record_from_manifest."
         )
-    view = {name: record_document[name] for name in RECORD_FIELDS}
-    return file_digest(canonical_json(_as_float(view)))
+    return _as_float({name: record_document[name] for name in RECORD_FIELDS})
 
 
 def record_from_manifest(entry_document: dict) -> dict:
     """The client-input fields of one manifest entry, as a datasets record states them.
 
     The server's record and the client's recomputation both come from here, so
-    a changed gripper polarity, unit factor or frequency is a digest mismatch
+    a changed gripper polarity, unit factor or frequency is a record mismatch
     before any simulator opens.
     """
     name = entry_document.get("name", "?")
@@ -368,7 +363,7 @@ def record_from_manifest(entry_document: dict) -> dict:
     control = _field(entry_document, "control_hz", f"manifest entry {name!r}")
     # A directory whose arms read no dpos or drot (joints-only: BimanualYAM, the
     # Tien Kung) states no unit factor in manifest schema 3; null is recorded
-    # as null, so the client's recomputation still meets the server's digest.
+    # as null, so the client's recomputation still meets the server's record.
     translation = _field(action, "translation_cm_per_unit", f"manifest entry {name!r} action")
     rotation = _field(action, "rotation_rad_per_unit", f"manifest entry {name!r} action")
     return {
@@ -429,14 +424,15 @@ class BodyEntry:
 
 @dataclass(frozen=True, eq=False)
 class Entry:
-    """One embodiment key: per-slot bounds and flags, its declarations, clause and digest.
+    """One embodiment key: per-slot bounds and flags, its declarations, clause and identity.
 
     low, high are [n_slots, 26] float64 (NaN where absent), constant and absent
     [n_slots, 26] bool, the gripper column holding 0 and 1. state_low and
     state_high are [n_slots, 29], NaN where absent and on the 6D and aperture,
     which are not range-mapped; state_constant and state_absent are [n_slots, 29].
     joints and hand are the key's declarations or None. ee_frame_fix is R_c,
-    applied as R @ R_c to the state 6D only.
+    applied as R @ R_c to the state 6D only. identity is entry_identity of
+    the entry as stored, what two files' entries are compared by.
     """
 
     key: str
@@ -458,7 +454,7 @@ class Entry:
     ee_frame_fix: np.ndarray | None
     clause: str
     stage: str
-    digest: str
+    identity: dict
     # The groups copied from action_from (inherited_groups); None when action_from is.
     action_from_groups: tuple[str, ...] | None = None
 
@@ -524,7 +520,7 @@ class Entry:
 class DatasetRecord:
     """One directory's client inputs and the masks it trains under.
 
-    The six inputs are what the record digest covers. constant is the
+    The six inputs (record_inputs) are what a client recomputes. constant is the
     directory's own constant action columns per slot; columns [n_slots, 26]
     and state_dims [n_slots, 29] are the action columns it trains and the
     state dimensions it holds valid, after its constants, dead readings, gated
@@ -539,7 +535,7 @@ class DatasetRecord:
     gripper: dict
     unit_factors: dict | None
     control_hz: float | None
-    digest: str
+    inputs: dict
     constant: tuple[tuple[bool, ...], ...]
     drot: str
     history_blocked: int
@@ -579,7 +575,7 @@ class Embodiments:
     """An embodiments.json, checked on the way in and read by key and by directory."""
 
     def __init__(self, document: dict, *, entries: dict[str, Entry],
-                 datasets: dict[str, DatasetRecord], file_digest_value: str | None):
+                 datasets: dict[str, DatasetRecord]):
         self._document = document
         self.schema = str(document["schema"])
         self.header = dict(document["normaliser"])
@@ -588,7 +584,6 @@ class Embodiments:
         self.entries = entries
         self.datasets = datasets
         self.trained = document.get("trained")
-        self.file_digest = file_digest_value
 
     @property
     def band_alpha(self) -> float:
@@ -605,20 +600,20 @@ class Embodiments:
                 f"Expected the {EMBODIMENTS_FILE} the stats stage or the runner wrote.\n"
                 "Build it with tools/build_stats.py, or point the config at it."
             )
-        data = where.read_bytes()
-        document = json.loads(data.decode("utf-8"), parse_constant=_refuse_constant)
-        return cls.from_document(document, where=str(where), file_digest=file_digest(data))
+        document = json.loads(where.read_bytes().decode("utf-8"),
+                              parse_constant=_refuse_constant)
+        return cls.from_document(document, where=str(where))
 
     @classmethod
-    def from_document(cls, document: dict, *, where: str,
-                      file_digest: str | None = None) -> Embodiments:
+    def from_document(cls, document: dict, *, where: str) -> Embodiments:
         """Check a parsed document and build the reader over it.
 
         Refuses another schema (a v6 one by name), another normaliser rule or
-        layout, a band alpha at or below zero, a stored digest the content no
-        longer gives, a bound that cannot map (DEGENERATE_RANGE, CX 11), a
-        declaration its flags contradict, a record mask wider than its keys,
-        and an end-effector fix that is not a proper rotation.
+        layout, a band alpha at or below zero, a bound that cannot map
+        (DEGENERATE_RANGE, CX 11), a declaration its flags contradict, a record
+        mask wider than its keys, and an end-effector fix that is not a proper
+        rotation. The checksum fields an older writer stored are neither read
+        nor kept, so a copy this reader writes holds none (without_checksums).
         """
         schema = _field(document, "schema", where)
         if schema in OLD_EMBODIMENTS_SCHEMAS:
@@ -652,8 +647,7 @@ class Embodiments:
                 "Expected null in a corpus copy, or the runner's object in a checkpoint copy.\n"
                 "Rebuild the file; the runner fills trained."
             )
-        return cls(copy.deepcopy(document), entries=entries, datasets=datasets,
-                   file_digest_value=file_digest)
+        return cls(without_checksums(document), entries=entries, datasets=datasets)
 
     def document(self) -> dict:
         """A copy of the document this reader was built from."""
@@ -723,22 +717,45 @@ class Embodiments:
         return record.body_state_dims & ~entry.body.state_absent
 
     def meta(self) -> dict:
-        """The stamp a checkpoint's meta.json carries: file digest and per-key digests."""
-        return {"digest": self.file_digest,
-                "keys": {key: entry.digest for key, entry in sorted(self.entries.items())}}
+        """The stamp a checkpoint's meta.json carries: the keys of the file beside it."""
+        return {"keys": sorted(self.entries)}
 
     def with_trained(self, trained: dict, *, parent: str | None) -> Embodiments:
         """This file with a trained section and a parent, as a checkpoint step writes it."""
         document = self.document()
         document["trained"] = copy.deepcopy(trained)
         document["parent"] = parent
-        return Embodiments.from_document(document, where="with_trained",
-                                         file_digest=file_digest(_dumps(document)))
+        return Embodiments.from_document(document, where="with_trained")
 
 
 def _dumps(document: dict) -> bytes:
     text = json.dumps(document, sort_keys=True, indent=1, ensure_ascii=False, allow_nan=False)
     return (text + "\n").encode("utf-8")
+
+
+# The checksum fields earlier writers of this file stored: an entry's and a
+# record's own, the manifest's and the lineage's in provenance and trained.
+OBSOLETE_FIELDS = ("digest", "record_digest", "manifest_sha256", "source_digest",
+                   "lineage_sha256")
+
+
+def without_checksums(value: Any, key: str | None = None) -> Any:
+    """A copy of a document without the checksums earlier writers stored.
+
+    The OBSOLETE_FIELDS are dropped, a provenance inputs map of path to checksum
+    becomes the sorted list of its paths, and a parent stated as a checksum is
+    null. Every other value is copied unchanged.
+    """
+    if isinstance(value, dict):
+        if key == "inputs":
+            return sorted(value)
+        return {name: without_checksums(item, name) for name, item in value.items()
+                if name not in OBSOLETE_FIELDS}
+    if isinstance(value, list):
+        return [without_checksums(item) for item in value]
+    if key == "parent" and isinstance(value, str) and value.startswith("sha256:"):
+        return None
+    return value
 
 
 def _refuse_constant(name: str) -> None:
@@ -1200,15 +1217,6 @@ def _read_entry(key: str, raw: dict, header: dict, file: str) -> Entry:
             "Expected the embodiment sentence the prompt carries for this key.\n"
             "Take it from config/embodiments.yaml."
         )
-    stored = _field(raw, "digest", where)
-    computed = entry_digest(raw, header)
-    if stored != computed:
-        raise ValueError(
-            f"{refusal_prefix(2)} {where} stores digest {stored!r} and its content gives "
-            f"{computed!r}.\n"
-            "Expected the stored entry digest to be the content's own.\n"
-            "The file was edited after it was written; rebuild it."
-        )
     action_from = _field(action, "from", where)
     from_groups = action.get("from_groups")
     if action_from is None and from_groups is not None:
@@ -1223,14 +1231,14 @@ def _read_entry(key: str, raw: dict, header: dict, file: str) -> Entry:
         action_from=None if action_from is None else str(action_from),
         state_low=state_low, state_high=state_high, state_constant=state_constant,
         state_absent=state_absent, body=body, ee_frame_fix=fix, clause=clause,
-        stage=str(_field(raw, "stage", where)), digest=computed,
+        stage=str(_field(raw, "stage", where)), identity=entry_identity(raw, header),
         action_from_groups=None if action_from is None else inherited_groups(from_groups, where),
     )
 
 
 def _read_record(name: str, raw: dict, entries: dict[str, Entry], file: str) -> DatasetRecord:
     where = f"{file} datasets[{name!r}]"
-    for field_name in (*RECORD_FIELDS, "record_digest", *MASK_FIELDS):
+    for field_name in (*RECORD_FIELDS, *MASK_FIELDS):
         _field(raw, field_name, where)
     keys = tuple(str(key) for key in raw["keys"])
     for key in keys:
@@ -1256,14 +1264,6 @@ def _read_record(name: str, raw: dict, entries: dict[str, Entry], file: str) -> 
             f"Expected one of {GRIPPER_METHODS}.\n"
             "Rebuild the file with this tree's tools/build_stats.py."
         )
-    computed = record_digest(raw)
-    if raw["record_digest"] != computed:
-        raise ValueError(
-            f"{refusal_prefix(2)} {where} stores record digest {raw['record_digest']!r} and "
-            f"its content gives {computed!r}.\n"
-            "Expected the stored record digest to be the content's own.\n"
-            "The file was edited after it was written; rebuild it."
-        )
     slots = tuple(int(slot) for slot in raw["slots"])
     n = len(slots)
     constant = _flags(raw["constant"], n, ACTION_DIM, "constant", where)
@@ -1285,7 +1285,7 @@ def _read_record(name: str, raw: dict, entries: dict[str, Entry], file: str) -> 
         directory=name, embodiment=embodiment, keys=keys, slots=slots, gripper=gripper,
         unit_factors=raw["unit_factors"],
         control_hz=None if raw["control_hz"] is None else float(raw["control_hz"]),
-        digest=computed, constant=tuple(tuple(bool(flag) for flag in row)
+        inputs=record_inputs(raw), constant=tuple(tuple(bool(flag) for flag in row)
                                         for row in constant.tolist()),
         drot=str(drot), history_blocked=int(blocked),
         columns=_flags(raw["columns"], n, ACTION_DIM, "columns", where),

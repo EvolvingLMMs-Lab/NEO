@@ -1,4 +1,4 @@
-"""The sidecar format, its stamp, the byte-checked writer and the one reader.
+"""The sidecar format, its stamp, the read-back writer and the one reader.
 
 A sidecar is one parquet per stage-1 directory with one row per directory row,
 episodes in ascending episode_index, each episode's rows in the order its own
@@ -9,14 +9,13 @@ target is a command, action.joints [A x 7]. Every value is float32 and NaN
 where the source recorded nothing; 0 is never written for a missing reading.
 
 The key-value metadata under METADATA_KEY is the stamp: the format and ingest
-layout, this tool's version, the v7 record stamps, the row count, the
-episodes and their rows with the digest of their boundaries, the digest of the
-directory's meta tree and the digest of every source value the rows were read
-from. read_sidecar refuses a file whose stamp is not this one.
+layout, this tool's version, the v7 record stamps, the row count, and the
+episodes and their rows. read_sidecar refuses a file whose stamp is not this
+one or whose rows are not its episodes'. Checksum fields an older writer
+stated are not read.
 """
 from __future__ import annotations
 
-import hashlib
 import io
 import json
 import math
@@ -24,7 +23,7 @@ import os
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import numpy as np
 import pyarrow as pa
@@ -42,9 +41,10 @@ from neo_vla.constants import (
     COLUMN_JOINTS_COMMAND,
     HAND_JOINTS,
     INGEST_LAYOUT,
+    METADATA_DIR,
     OLD_PREFIX_LAYOUTS,
+    PRETRAIN_CORPUS,
     SIDECAR_DIR,
-    STAGE1_CORPUS,
     STATE_STAMP,
     refusal_prefix,
 )
@@ -95,8 +95,8 @@ class Misaligned(ValueError):
 
 
 def default_out(root: Path) -> Path:
-    """Where the stage-1 sidecars go under a corpus root."""
-    return root / f"prep_{STAGE1_CORPUS}" / SIDECAR_DIR
+    """Where the action-pretraining corpus's sidecars go under a data root."""
+    return root / METADATA_DIR / PRETRAIN_CORPUS / SIDECAR_DIR
 
 
 def sidecar_path(out: Path, name: str) -> Path:
@@ -168,44 +168,6 @@ def directory_episodes(directory: Path) -> list[Episode]:
     return episodes
 
 
-def episode_starts_bytes(rows: Iterable[int]) -> bytes:
-    """The episodes' row boundaries as the npy bytes build_cache writes."""
-    counts = np.asarray(list(rows), dtype=np.int64)
-    starts = np.zeros(counts.size + 1, dtype=np.int64)
-    np.cumsum(counts, out=starts[1:])
-    buffer = io.BytesIO()
-    np.save(buffer, starts, allow_pickle=False)
-    return buffer.getvalue()
-
-
-def episode_starts_digest(rows: Iterable[int]) -> str:
-    """The sha256 of the boundaries, as the stamp records them."""
-    return hashlib.sha256(episode_starts_bytes(rows)).hexdigest()
-
-
-class SourceDigest:
-    """A running hash over every source value a sidecar was read from."""
-
-    def __init__(self) -> None:
-        self._hash = hashlib.sha256()
-
-    def text(self, value: str) -> None:
-        payload = value.encode("utf-8")
-        self._hash.update(len(payload).to_bytes(8, "little"))
-        self._hash.update(payload)
-
-    def array(self, value: np.ndarray | None) -> None:
-        if value is None:
-            self.text("absent")
-            return
-        contiguous = np.ascontiguousarray(value)
-        self.text(f"{contiguous.dtype.str}{list(contiguous.shape)}")
-        self._hash.update(contiguous.tobytes())
-
-    def hexdigest(self) -> str:
-        return self._hash.hexdigest()
-
-
 def empty_columns(rows: int, arms: int, command: bool) -> dict[str, np.ndarray]:
     """The data columns of a sidecar, every value NaN until a source fills it."""
     names = OBSERVATION_COLUMNS + (COMMAND_COLUMNS if command else ())
@@ -254,8 +216,7 @@ def column_summary(values: np.ndarray) -> dict[str, int]:
 
 def stamp_of(*, entry: dict[str, Any], family: str, arms: int,
              episodes: list[Episode], columns: dict[str, np.ndarray],
-             described: dict[str, dict[str, Any]], source_digest: str,
-             directory_digest: str, checks: dict[str, Any]) -> dict[str, Any]:
+             described: dict[str, dict[str, Any]], checks: dict[str, Any]) -> dict[str, Any]:
     """The metadata a sidecar carries, with every count taken from its columns."""
     rows = [episode.rows for episode in episodes]
     summary = {}
@@ -282,9 +243,6 @@ def stamp_of(*, entry: dict[str, Any], family: str, arms: int,
         "rows": int(sum(rows)),
         "episodes": [episode.index for episode in episodes],
         "episode_rows": rows,
-        "episode_starts_sha256": episode_starts_digest(rows),
-        "directory_meta_sha256": directory_digest,
-        "source_sha256": source_digest,
         "columns": summary,
         "column_order": list(columns),
         "checks": checks,
@@ -309,21 +267,19 @@ def write_sidecar(path: Path, table: pa.Table) -> dict[str, Any]:
     """Write one sidecar through a temporary, then read the bytes back.
 
     The filesystem under the corpus reports success and truncates at quota,
-    so the file on disk is hashed and compared with the bytes produced before
-    it replaces anything. Returns the byte count and the hash.
+    so the file on disk is read back and compared with the bytes produced
+    before it replaces anything. Returns the byte count.
     """
     buffer = io.BytesIO()
     pq.write_table(table, buffer, compression=COMPRESSION, row_group_size=ROW_GROUP_ROWS)
     payload = buffer.getvalue()
-    digest = hashlib.sha256(payload).hexdigest()
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + ".tmp")
     with open(temporary, "wb") as handle:
         handle.write(payload)
         handle.flush()
         os.fsync(handle.fileno())
-    landed = stage.sha256_of(temporary)
-    if landed != digest or temporary.stat().st_size != len(payload):
+    if temporary.read_bytes() != payload:
         temporary.unlink()
         raise OSError(
             f"{temporary} does not hold the {len(payload)} bytes written to it\n"
@@ -331,7 +287,7 @@ def write_sidecar(path: Path, table: pa.Table) -> dict[str, Any]:
             "free space under the output root, then run this directory again"
         )
     os.replace(temporary, path)
-    return {"bytes": len(payload), "sha256": digest}
+    return {"bytes": len(payload)}
 
 
 def _refuse_stamp(path: Path, what: str, found: Any, expected: Any) -> None:
@@ -365,12 +321,6 @@ def check_rows(path: Path, meta: dict[str, Any], table: pa.Table) -> None:
             f"{refusal_prefix(16)} {path} lists {len(meta['episodes'])} episodes "
             f"and {len(rows)} row counts\n"
             "expected one row count per episode\n"
-            "rebuild the sidecar"
-        )
-    if episode_starts_digest(rows) != meta["episode_starts_sha256"]:
-        raise ValueError(
-            f"{refusal_prefix(16)} {path} episode boundaries do not hash to its stamp\n"
-            f"expected sha256 {meta['episode_starts_sha256'][:12]}\n"
             "rebuild the sidecar"
         )
     if table.num_rows != meta["rows"] or sum(rows) != meta["rows"]:
@@ -478,7 +428,7 @@ def current(out: Path, name: str, commit: str | None = None) -> dict[str, Any] |
         return None
     if commit is not None and record.get("git_commit") != commit:
         return None
-    if path.stat().st_size != record.get("bytes") or stage.sha256_of(path) != record.get("sha256"):
+    if path.stat().st_size != record.get("bytes"):
         return None
     return record
 
@@ -491,20 +441,18 @@ def write_receipt(out: Path, name: str, record: dict[str, Any]) -> None:
     os.replace(temporary, path)
 
 
-def write_built(out: Path, entry: dict[str, Any], family: str, directory: Path,
+def write_built(out: Path, entry: dict[str, Any], family: str,
                 built: dict[str, Any], git_commit: str) -> dict[str, Any]:
     """Stamp, write, read back and receipt one directory's built columns.
 
     built is what a family's build returns: episodes, columns, episode and
-    frame columns, descriptions, arms, the source digest and the checks. The
-    sidecar is read back through read_sidecar before the receipt is written,
-    so a receipt names only a sidecar a reader accepts.
+    frame columns, descriptions, arms and the checks. The sidecar is read back
+    through read_sidecar before the receipt is written, so a receipt names only
+    a sidecar a reader accepts.
     """
     meta = stamp_of(
         entry=entry, family=family, arms=built["arms"], episodes=built["episodes"],
-        columns=built["columns"], described=built["described"],
-        source_digest=built["source_digest"],
-        directory_digest=stage.sha256_of_tree(directory / "meta"), checks=built["checks"])
+        columns=built["columns"], described=built["described"], checks=built["checks"])
     meta["git_commit"] = git_commit
     if "source_root" in built:
         meta["source_root"] = built["source_root"]

@@ -3,7 +3,7 @@
 Rendering every instruction ahead of a run is worth doing once and reading many
 times, and a cache of rendered text is only usable by a run that would have
 rendered the same text. A stamp is what that means, written next to the cache:
-the template and its hash, the tokeniser, the instruction budget and the prefix
+the template's name, the tokeniser, the instruction budget and the prefix
 layout.
 
 Every field is compared. The previous cache compared the budget alone, so a
@@ -16,6 +16,7 @@ import json
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
+from ...constants import prefix_layout_of
 from .template import Template
 
 STAMP_FILENAME = "stamp.json"
@@ -26,18 +27,16 @@ class Stamp:
     """What a rendered-prompt cache was built against.
 
     template_name    the artifact's own name
-    template_version its full version string
-    template_digest  the hash of the artifact file
     tokenizer_id     the tokeniser directory or repository the ids came from
     max_text_tokens  the budget the text was fitted to
     prefix_layout    the input layout the sections were written for
     n_views          camera slots, which set how many blocks precede the text
     intrinsics_mode  how the calibration enters; tokens, the one mode
+
+    Extra fields an older stamp holds are not read.
     """
 
     template_name: str
-    template_version: str
-    template_digest: str
     tokenizer_id: str
     max_text_tokens: int
     prefix_layout: str
@@ -64,14 +63,12 @@ def stamp_of(
     if str(prefix_layout) != template.prefix_layout:
         raise ValueError(
             f"the stamp was asked for prefix_layout {str(prefix_layout)!r} and the template "
-            f"{template.name} {template.version} is written for {template.prefix_layout!r}.\n"
+            f"{template.name} is written for {template.prefix_layout!r}.\n"
             "Expected the template's own layout: the rendered sections are that layout's.\n"
             "Pass template.prefix_layout, or render against the template of the layout you mean."
         )
     return Stamp(
         template_name=template.name,
-        template_version=template.version,
-        template_digest=template.digest,
         tokenizer_id=str(tokenizer_id),
         max_text_tokens=int(max_text_tokens),
         prefix_layout=str(prefix_layout),
@@ -110,15 +107,13 @@ def read(directory: str | Path) -> Stamp:
         raise ValueError(
             f"{found} has no {missing}.\n"
             f"Expected all of {[field.name for field in fields(Stamp)]}.\n"
-            "Render the prompts again with this version of the stamp."
+            "Render the prompts again with this tree's tools."
         )
     return Stamp(
         template_name=str(document["template_name"]),
-        template_version=str(document["template_version"]),
-        template_digest=str(document["template_digest"]),
         tokenizer_id=str(document["tokenizer_id"]),
         max_text_tokens=int(document["max_text_tokens"]),
-        prefix_layout=str(document["prefix_layout"]),
+        prefix_layout=prefix_layout_of(document["prefix_layout"]),
         n_views=int(document["n_views"]),
         intrinsics_mode=str(document["intrinsics_mode"]),
     )

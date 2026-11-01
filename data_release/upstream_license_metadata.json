@@ -5,7 +5,6 @@
     "license_metadata": null,
     "url": "https://huggingface.co/datasets/agibot-world/AgiBotWorld-Beta",
     "checked_at": "2026-11-01",
-    "approved_for_upload": false,
     "status": "license terms identified; exact processed-source revision and conditions still to be matched"
   },
   {
@@ -14,7 +13,6 @@
     "license_metadata": "apache-2.0",
     "url": "https://huggingface.co/datasets/allenai/MolmoAct2-BimanualYAM-Dataset",
     "checked_at": "2026-11-01",
-    "approved_for_upload": false,
     "status": "license terms identified; exact processed-source revision and conditions still to be matched"
   },
   {
@@ -23,7 +21,6 @@
     "license_metadata": "cc-by-nc-sa-4.0",
     "url": "https://huggingface.co/datasets/OpenGalaxea/Galaxea-Open-World-Dataset",
     "checked_at": "2026-11-01",
-    "approved_for_upload": false,
     "status": "license terms identified; exact processed-source revision and conditions still to be matched"
   },
   {
@@ -32,7 +29,6 @@
     "license_metadata": null,
     "url": "https://huggingface.co/datasets/InternRobotics/InternData-A1",
     "checked_at": "2026-11-01",
-    "approved_for_upload": false,
     "status": "license terms identified; exact processed-source revision and conditions still to be matched"
   },
   {
@@ -41,7 +37,6 @@
     "license_metadata": "apache-2.0",
     "url": "https://huggingface.co/datasets/x-humanoid-robomind/RoboMIND",
     "checked_at": "2026-11-01",
-    "approved_for_upload": false,
     "status": "license terms identified; exact processed-source revision and conditions still to be matched"
   }
 ]

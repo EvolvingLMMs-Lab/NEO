@@ -14,7 +14,6 @@ mode froze, so the weights need no second file to be whole.
 from __future__ import annotations
 
 import errno
-import hashlib
 import json
 import logging
 import os
@@ -90,9 +89,28 @@ def latest(root: str | Path) -> Path | None:
     return directories[-1] if directories else None
 
 
-def file_digest(data: bytes) -> str:
-    """The digest meta.json names a file by: sha256:<hex> of its bytes."""
-    return "sha256:" + hashlib.sha256(data).hexdigest()
+def stated_keys(stated: dict) -> list[str] | None:
+    """The embodiment keys meta.json states, or None when it states none.
+
+    A step this tree writes lists them; an older step maps each key to a
+    checksum string, which is not read.
+    """
+    keys = stated.get("keys") if isinstance(stated, dict) else None
+    if isinstance(keys, dict):
+        keys = list(keys)
+    if not isinstance(keys, list) or not all(isinstance(key, str) for key in keys):
+        return None
+    return sorted(keys)
+
+
+def file_keys(data: bytes) -> list[str] | None:
+    """The embodiment keys an embodiments.json holds, or None when it is not one."""
+    try:
+        document = json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    entries = document.get("embodiments") if isinstance(document, dict) else None
+    return sorted(entries) if isinstance(entries, dict) else None
 
 
 def read_meta(path: str | Path) -> dict:
@@ -124,8 +142,8 @@ def check_format(meta: dict, where: str) -> None:
 def check_embodiments_file(path: str | Path, meta: dict, where: str) -> None:
     """R1 and R2 on the embodiments.json a step's meta.json names, before torch.load.
 
-    A step whose meta states an embodiments digest must hold the file (R1), and
-    the file's bytes must hash to that digest (R2): the normaliser the weights
+    A step whose meta names an embodiments file must hold it (R1), and the file
+    must hold exactly the keys meta.json lists (R2): the normaliser the weights
     were trained under is part of the checkpoint. A meta that states none is
     left to the model's own check, which refuses it for a policy.
     """
@@ -136,17 +154,16 @@ def check_embodiments_file(path: str | Path, meta: dict, where: str) -> None:
     if not found.is_file():
         raise ValueError(
             f"{constants.refusal_prefix(1)} {where} holds no {EMBODIMENTS_FILE}.\n"
-            f"Expected the embodiments file its meta.json names ({stated.get('digest')}) "
-            "beside state.pt.\n"
+            "Expected the embodiments file its meta.json names beside state.pt.\n"
             "Copy the step directory whole; the normaliser is part of the checkpoint."
         )
-    digest = file_digest(found.read_bytes())
-    if digest != stated.get("digest"):
+    held, keys = file_keys(found.read_bytes()), stated_keys(stated)
+    if held is None or held != keys:
         raise ValueError(
-            f"{constants.refusal_prefix(2)} {where}'s {EMBODIMENTS_FILE} hashes to "
-            f"{digest}, its meta.json names {stated.get('digest')}.\n"
-            "Expected the file written beside these weights, byte for byte.\n"
-            "Restore the step's own embodiments.json; an edited normaliser is a "
+            f"{constants.refusal_prefix(2)} {where}'s {EMBODIMENTS_FILE} holds keys "
+            f"{held}, its meta.json names {keys}.\n"
+            "Expected the file written beside these weights.\n"
+            "Restore the step's own embodiments.json; another normaliser is a "
             "different model."
         )
 
@@ -259,7 +276,7 @@ def model_meta(module: nn.Module) -> dict:
     """What the model asks meta.json to state beside the step, or nothing.
 
     The policy states its pixel convention, its prefix layout, its
-    embodiments file's digest and its state and history stamps, which is what
+    embodiments file's keys and its state and history stamps, which is what
     lets a resume, an init_from and a serving load refuse a checkpoint written
     under another. A model without the method writes the four fields always
     written.
@@ -278,7 +295,7 @@ def model_files(module: nn.Module, stated: dict) -> dict[str, bytes]:
     """The files the model asks to be written beside state.pt, checked against its meta.
 
     The policy names its embodiments.json, and meta.json names that file's
-    digest; the two are held together here, before anything is written, so no
+    keys; the two are held together here, before anything is written, so no
     writer can publish a step whose meta describes another file.
     """
     files = dict(module.checkpoint_files()) if hasattr(module, "checkpoint_files") else {}
@@ -290,14 +307,15 @@ def model_files(module: nn.Module, stated: dict) -> dict[str, bytes]:
         )
     stated_file = stated.get("embodiments")
     written = files.get(EMBODIMENTS_FILE)
+    held = None if written is None else file_keys(written)
     if (stated_file is None) != (written is None) or (
-        written is not None and file_digest(written) != stated_file.get("digest")
+        written is not None and (held is None or held != stated_keys(stated_file))
     ):
         raise ValueError(
             f"meta.json names embodiments {stated_file!r} and the step would hold "
-            f"{'no file' if written is None else file_digest(written)}.\n"
+            f"{'no file' if written is None else f'a file with keys {held}'}.\n"
             f"Expected {EMBODIMENTS_FILE} beside state.pt exactly when meta names it, "
-            "with the digest meta states.\n"
+            "with the keys meta states.\n"
             "Take both from the same policy.embodiments."
         )
     return files

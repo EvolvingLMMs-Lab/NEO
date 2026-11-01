@@ -12,7 +12,7 @@ directory and episode, so a rerun over unchanged data writes the same bytes.
 
 Usage:
     python tools/scan_source.py --root /corpus --dirs-file dirs.txt \
-        --out prep/inventory.jsonl
+        --out metadata/C/inventory.jsonl
 """
 from __future__ import annotations
 
@@ -56,10 +56,8 @@ def directory_inputs(
 ) -> dict[str, Path]:
     """What a stage reading a directory list records as its inputs.
 
-    The list itself is one of them. Removing a directory from it leaves every
-    other recorded input hashing to what it did, so a stage that named only the
-    directories would be declared current and the next stage would read an
-    inventory still naming what was dropped.
+    The list itself is one of them, so the header says which listing the
+    directories came from as well as which directories were read.
     """
     inputs = {stage.relative(root, path / "meta"): path / "meta" for path in directories}
     if list_file is not None:

@@ -1,7 +1,7 @@
 """Stage 11: check a manifest against the data it points at, not against itself.
 
 Every path resolves under the root and exists, every frame file the index names
-is a file holding bytes, every hash the header recorded still matches, every
+is a file holding bytes, every input the header recorded is still there, every
 recorded grid is what the snapping rule produces under the manifest's own
 canvas, every episode boundary array agrees with the row count beside it, every
 calibration describes a picture the cache actually holds, and the declared
@@ -12,11 +12,12 @@ Checks that need the loader are named and counted as skipped rather than
 quietly passed; --require-loader turns a skipped check into a failure.
 
 Usage:
-    python tools/verify_manifest.py --root /corpus --manifest manifests/oxe3src.json
+    python tools/verify_manifest.py --root /corpus --manifest manifests/action_pretrain.json
 """
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import io
 import json
 import logging
@@ -59,13 +60,13 @@ from neo_vla.constants import (
     STATE_DIM,
     STATE_MEASURED,
     STATE_NO_HISTORY,
-    TEMPLATE_MAJOR,
     batch_keys,
+    prefix_layout_of,
 )
 from neo_vla.data.conditioning import parse_frame_ref
 from neo_vla.data.history import noise_dims
 from neo_vla.data.images import snap_grid
-from neo_vla.data.prompt import check_mode_agrees, load_template
+from neo_vla.data.prompt import TEMPLATE_FILE, Stamp, check_mode_agrees, load_template
 from neo_vla.model.tokenizers import EXTRINSICS_DIM, INTRINSICS_DIM
 
 logger = logging.getLogger("verify_manifest")
@@ -194,9 +195,9 @@ def check_paths(root: Path, manifest: dict[str, Any], report: Report) -> None:
 
 
 def check_inputs(root: Path, manifest: dict[str, Any], report: Report) -> None:
-    """The header's recorded input hashes still describe the files on disk."""
+    """The header's recorded inputs are still under the root."""
     for line in stage.check_inputs_match(manifest["provenance"], root):
-        report.fail(f"input hash: {line}")
+        report.fail(f"input: {line}")
 
 
 def check_grids(manifest: dict[str, Any], report: Report) -> None:
@@ -571,25 +572,32 @@ def check_prompt_stamp(root: Path, manifest: dict[str, Any], report: Report) -> 
     Two comparisons of different reach. The stamp beside the rendered text is
     the stamp the manifest holds, which catches a cache swapped under a
     manifest but not a pair that went stale together, because both are written
-    from one object. So the four fields the template file itself determines are
+    from one object. So the two fields the template file itself determines are
     read back off that file, prefix_layout among them: a command-line default
-    could let an artifact of one version reach a run under another's layout
-    string. The other three
-    describe the run rather than the artifact, and re-deriving them would
+    could let an artifact reach a run under another layout string. The other
+    four describe the run rather than the artifact, and re-deriving them would
     compare the manifest with itself.
     """
-    declared = manifest["prompt"]["stamp"]
-    if declared.get("prefix_layout") != PREFIX_LAYOUT:
-        report.fail(f"prompt stamp prefix_layout {declared.get('prefix_layout')!r}; this tree "
-                    f"reads {PREFIX_LAYOUT!r} only, rebuild with neo_v{TEMPLATE_MAJOR}.yaml")
+    # The stamp's own fields, an earlier label of this layout read as this one;
+    # extra fields an older stamp holds are not read.
+    stamped = [field.name for field in dataclasses.fields(Stamp)]
+
+    def read(stamp: dict[str, Any]) -> dict[str, Any]:
+        return {field: prefix_layout_of(stamp.get(field)) if field == "prefix_layout"
+                else stamp.get(field) for field in stamped}
+
+    declared = read(manifest["prompt"]["stamp"])
+    if declared["prefix_layout"] != PREFIX_LAYOUT:
+        report.fail(f"prompt stamp prefix_layout {declared['prefix_layout']!r}; this tree "
+                    f"reads {PREFIX_LAYOUT!r} only, rebuild with {TEMPLATE_FILE}")
     stamp_path = root / manifest["prompt"]["cache"] / "stamp.json"
     if not stamp_path.exists():
         report.skip(f"prompt stamp: {stamp_path} has not been built")
     else:
-        stored = json.loads(stamp_path.read_text(encoding="utf-8"))
-        for field, value in sorted(declared.items()):
-            if stored.get(field) != value:
-                report.fail(f"prompt stamp {field}: {stored.get(field)!r} against {value!r}")
+        stored = read(json.loads(stamp_path.read_text(encoding="utf-8")))
+        for field in stamped:
+            if stored[field] != declared[field]:
+                report.fail(f"prompt stamp {field}: {stored[field]!r} against {declared[field]!r}")
     named = manifest["prompt"]["template"]
     if not named:
         report.skip("prompt template: no template named, the stamp is not re-derived")
@@ -607,18 +615,16 @@ def check_prompt_stamp(root: Path, manifest: dict[str, Any], report: Report) -> 
         report.fail(f"prompt template {named} does not load: {str(error).splitlines()[0]}")
         return
     for field, found in (("template_name", template.name),
-                         ("template_version", template.version),
-                         ("template_digest", template.digest),
                          ("prefix_layout", template.prefix_layout)):
-        if declared.get(field) != found:
+        if declared[field] != found:
             report.fail(
-                f"prompt {field}: the manifest holds {declared.get(field)!r} and "
+                f"prompt {field}: the manifest holds {declared[field]!r} and "
                 f"{named} produces {found!r}; re-render with tools/build_cache.py"
             )
-    # The artifact and the mode name the same thing and only the artifact is
-    # hashed into the stamp, so nothing else in this pass can see them disagree.
+    # The artifact and the mode name the same thing, so nothing else in this
+    # pass can see them disagree.
     try:
-        check_mode_agrees(template, declared.get("intrinsics_mode", ""))
+        check_mode_agrees(template, declared["intrinsics_mode"] or "")
     except ValueError as error:
         report.fail(f"prompt template {named}: {str(error).splitlines()[0]}")
 

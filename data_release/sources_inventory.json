@@ -1,7 +1,7 @@
 {
  "schema": "neo_vla_data_release_source_inventory_v1",
- "corpus": "gd7_tokens_nobw",
- "status": "Licence and redistribution terms of every source are pending review. Nothing in this file states or implies a licence. A source is released only after its entry in a filled sources manifest is approved with dated evidence (see README.md).",
+ "corpus": "action_pretrain",
+ "status": "Licence and redistribution terms of every source are pending review. Nothing in this file states or implies a licence; see UPSTREAM_TERMS.md for the terms identified per source and what remains to be resolved.",
  "families": [
   {"family": "agibot", "upstream_dataset": "AgiBot World (Beta)", "manifest_sources": ["agibot"],
    "processed_form": "converted episode directories; joint and body sidecars", "license": "pending review", "redistribution": "unknown"},

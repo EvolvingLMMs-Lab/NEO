@@ -1,7 +1,7 @@
 """config/embodiments.yaml under v7 (neo_vla_embodiment_keys_v2): what each key declares.
 
 Per key the table states its clause, slots, effector, stage and frame fix, and
-under v7 three declarations the stages read and every entry digest covers:
+under v7 three declarations the stages read and every entry identity holds:
 joints ({count, names, unit} or null), hand ({count, order, unit,
 polarity_note} or null) and body (absent, or {base, torso, head} with none
 where the source records no such part). A v1 table states none of them and is
@@ -28,8 +28,8 @@ from neo_vla.data.embodiment import HAND_UNITS, JOINT_UNITS, inherited_groups
 # the word absent (body), but never left out: silence is how a v1 key reads.
 DECLARATIONS = ("joints", "hand", "body")
 
-# The fields each declaration carries into embodiments.json (the entry digest
-# covers them). A key may add a note for its reader; it is not copied.
+# The fields each declaration carries into embodiments.json (the entry identity
+# holds them). A key may add a note for its reader; it is not copied.
 JOINT_FIELDS = ("count", "names", "unit")
 HAND_FIELDS = ("count", "order", "unit", "polarity_note")
 NOTE = "note"

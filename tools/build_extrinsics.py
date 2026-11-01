@@ -13,10 +13,10 @@ position, and it is confirmed against the frame count both sides state.
 Usage:
     python tools/build_extrinsics.py --root /corpus --source agibot \
         --calib calib/agibot_extrinsics --dirs-file config/agibot_dirs.txt \
-        --layouts config/oxe3src.json --out prep/extrinsics_agibot.jsonl
+        --layouts config/layouts/action_pretrain.json --out metadata/C/extrinsics_agibot.jsonl
     python tools/build_extrinsics.py --root /corpus --source agibot_wrist \
         --calib calib/agibot_geometry --dirs-file config/agibot_dirs.txt \
-        --layouts config/oxe3src.json --out prep/extrinsics_agibot_wrist.jsonl
+        --layouts config/layouts/action_pretrain.json --out metadata/C/extrinsics_agibot_wrist.jsonl
 """
 from __future__ import annotations
 

@@ -5,40 +5,22 @@ holds anchor ids and projected slots and belongs to the encoder's scaffold,
 which is fixed width; sections 2 to 5 are text the renderer produces per
 sample. Loading a template that moves a section across that line is refused.
 
-Only major 7 loads. Versions 4 and 5 laid section 2 down as the <scale>
-column, a projected step size that no longer exists, and version 6 framed the
-v6 layout (four <state> columns, the 10-number record, the 19-wide action
-row), so their files describe a prefix this tree cannot build; they are
-refused by name, and a checkpoint of that lineage is served by the tree that
-trained it. Version 7 renders the words of 6.0.0 (the control frequency as a
-line of text), and frequency_text below is the one formatter of that line.
+There is one template, config/prompt_template/policy.yaml, written for the
+native prefix layout. The control frequency is a line of text, and
+frequency_text below is the one formatter of that line.
 """
 from __future__ import annotations
 
-import hashlib
 import math
 from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
 
-from ...constants import FREQUENCY_OPEN, INSTRUCTION_OPEN, TEMPLATE_MAJOR
+from ...constants import FREQUENCY_OPEN, INSTRUCTION_OPEN, OLD_PREFIX_LAYOUTS, PREFIX_LAYOUT
 
-# The layout this repository renders, and the only major that loads.
-TEMPLATE_MAJORS = (TEMPLATE_MAJOR,)
-TEMPLATE_FILE = f"neo_v{TEMPLATE_MAJOR}.yaml"
-
-# Majors that loaded before and are refused by name now, with what replaced
-# the section that made them unreadable here.
-RETIRED_MAJORS = {
-    4: "section 2 was the <scale> column and the extrinsics were a per-arm suffix token",
-    5: "section 2 was the <scale> column (id 151690, retired and never reused)",
-    6: "it framed the v6 layout: four <state> columns (Lp 906), the 10-number state "
-       "record and the 19-wide action row; v7 adds the body column per role (Lp 908), "
-       "the 29-wide record and the 26-wide row",
-}
-# The last tree that served each retired major's checkpoints.
-SERVED_BY = {4: "dcd90a5", 5: "dcd90a5", 6: "0ca67f7"}
+# The one template this repository renders.
+TEMPLATE_FILE = "policy.yaml"
 
 # Sections the encoder's scaffold lays down, by number. The renderer never
 # emits these, because anything it emits varies in length per sample and the
@@ -62,13 +44,13 @@ REMOVED_GEOMETRY_LAYOUTS = ("none", "patch", "text", "tower")
 DOCUMENT_KEYS = ("template", "scaffold_sections", "sentences", "order", "section_joiner",
                  "slots")
 
-# What the header block holds. prefix_layout is checked against the version
-# rather than stored: the run's own layout goes into the stamp.
-TEMPLATE_KEYS = ("name", "version", "prefix_layout")
+# What the header block holds: the template's name and the prefix layout it
+# is written for, which must be this tree's.
+TEMPLATE_KEYS = ("name", "prefix_layout")
 
 # The scaffold block: section 1 only. The section header strings, the history
 # and now headers and the state line live in the encoder, so this file cannot
-# disagree with those and its digest does not move when they do.
+# disagree with those.
 SCAFFOLD_KEYS = {"axis": ("number", "per_view_slots", "geometry")}
 # Of those, the ones every artifact states: all of them.
 SCAFFOLD_REQUIRED = SCAFFOLD_KEYS
@@ -110,23 +92,20 @@ FREQUENCY_SLOT = {"text": "per_dataset", "unit": "Hz", "unknown": "NA", "decimal
 class Template:
     """A loaded template artifact.
 
-    version         the full version string, whose major is in TEMPLATE_MAJORS
-    prefix_layout   the input layout it was written for, "v7"
+    name            the template's name, which the stamp carries into the cache
+    prefix_layout   the input layout it was written for, PREFIX_LAYOUT
     geometry        how section 1 lays a view's calibration down
     sentences       the sentence forms, by slot name
     order           the renderer's slots, in the order they are joined
     section_joiner  what joins them
-    digest          the file's hash, which the stamp carries into the cache
     """
 
     name: str
-    version: str
     prefix_layout: str
     geometry: str
     sentences: dict[str, str]
     order: tuple[str, ...]
     section_joiner: str
-    digest: str
 
 
 def frequency_text(hz) -> str:
@@ -200,34 +179,18 @@ def _mapping(where: str, value) -> dict:
     return value
 
 
-def _check_version(path: Path, header: dict) -> str:
-    """The full version string, once its major is the one that loads."""
-    version = str(header["version"])
-    head = version.split(".")[0]
-    major = int(head) if head.isdigit() else None
-    if major in RETIRED_MAJORS:
-        raise ValueError(
-            f"{path.name} is template version {version}, major {major}, which this tree "
-            f"no longer reads: {RETIRED_MAJORS[major]}.\n"
-            f"Expected major {TEMPLATE_MAJOR} (config/prompt_template/{TEMPLATE_FILE}).\n"
-            f"Re-render the corpus against {TEMPLATE_FILE}; a checkpoint of the old lineage is "
-            f"served by the tree that trained it ({SERVED_BY[major]})."
-        )
-    if major not in TEMPLATE_MAJORS:
-        raise ValueError(
-            f"{path.name} is template version {version}.\n"
-            f"Expected major version {TEMPLATE_MAJOR}.\n"
-            "A checkpoint trained against another prefix layout cannot read this one."
-        )
+def _check_header(path: Path, header: dict) -> None:
+    """Raise unless the header names the template and this tree's prefix layout."""
+    _refuse_unread_keys(f"{path.name}: template", header, TEMPLATE_KEYS)
     _require_keys(f"{path.name}: template", header, TEMPLATE_KEYS)
     layout = str(header["prefix_layout"])
-    if layout != f"v{major}":
+    if layout != PREFIX_LAYOUT:
+        retired = " (a retired layout)" if layout in OLD_PREFIX_LAYOUTS else ""
         raise ValueError(
-            f"{path.name} declares prefix layout {layout!r} at version {version}.\n"
-            f"Expected 'v{major}'.\n"
-            "The layout and the version name the same thing; make them agree."
+            f"{path.name} declares prefix layout {layout!r}{retired}.\n"
+            f"Expected {PREFIX_LAYOUT!r}, the one layout this tree builds.\n"
+            f"Use config/prompt_template/{TEMPLATE_FILE}."
         )
-    return version
 
 
 def _check_scaffold(path: Path, scaffold: dict) -> str:
@@ -426,33 +389,30 @@ def _check_slots(path: Path, slots: dict, order: tuple[str, ...]) -> None:
             raise ValueError(
                 f"{path.name}: slots.frequency.{key} is {stated!r} and frequency_text "
                 f"holds {held!r}.\n"
-                "Expected the two to agree: the file states the format so the digest "
-                "covers it, and frequency_text writes it.\n"
-                "Change both, and re-render every cache stamped with the old digest."
+                "Expected the two to agree: the file states the format, and "
+                "frequency_text writes it.\n"
+                "Change both together, and re-render every prompt cache."
             )
 
 
 def load_template(path: str | Path) -> Template:
     """Read a template artifact and refuse anything this layout cannot render.
 
-    Raises when the major version is not 7 (naming a retired 4, 5 or 6), when the
-    per-view slots are not the ones the geometry lays down, when a second
-    control-rate channel is declared, when the frequency block or the opening
-    and instruction forms disagree with what the code holds, and when the frame
+    Raises when the header names another prefix layout, when the per-view
+    slots are not the ones the geometry lays down, when a second control-rate
+    channel is declared, when the frequency block or the opening and
+    instruction forms disagree with what the code holds, and when the frame
     clause is not the last renderer slot before the demonstration header.
     """
     path = Path(path)
-    raw = path.read_bytes()
-    document = _mapping(path.name, yaml.safe_load(raw.decode("utf-8")))
+    document = _mapping(path.name, yaml.safe_load(path.read_bytes().decode("utf-8")))
     _refuse_rate_names(path.name, document)
     _refuse_unread_keys(path.name, document, DOCUMENT_KEYS)
-    # The header first, and within it the version: a retired major is refused
-    # by name before anything its layout lacked is reported as missing.
+    # The header first: a template for another layout is refused by its layout
+    # before anything that layout lacked is reported as missing.
     _require_keys(path.name, document, ("template",))
     header = _mapping(f"{path.name}: template", document["template"])
-    _refuse_unread_keys(f"{path.name}: template", header, TEMPLATE_KEYS)
-    _require_keys(f"{path.name}: template", header, ("version",))
-    version = _check_version(path, header)
+    _check_header(path, header)
     _require_keys(path.name, document, DOCUMENT_KEYS)
     geometry = _check_scaffold(
         path, _mapping(f"{path.name}: scaffold_sections", document["scaffold_sections"]),
@@ -471,13 +431,11 @@ def load_template(path: str | Path) -> Template:
     _check_slots(path, _mapping(f"{path.name}: slots", document["slots"]), order)
     return Template(
         name=str(header["name"]),
-        version=version,
         prefix_layout=str(header["prefix_layout"]),
         geometry=geometry,
         sentences={str(slot): str(form) for slot, form in sentences.items()},
         order=order,
         section_joiner=joiner,
-        digest=f"sha256:{hashlib.sha256(raw).hexdigest()}",
     )
 
 

@@ -11,8 +11,8 @@ table keyed its files by the absolute directory they were built from, so moving
 the corpus left every lookup missing and every directory silently uniform.
 
 Usage:
-    python tools/build_weights.py --root /corpus --kept prep/kept.jsonl \
-        --share agibot=0.49 --share oxe=0.49 --share rh20t=0.02 --out prep/weights.json
+    python tools/build_weights.py --root /corpus --kept metadata/C/kept.jsonl \
+        --share agibot=0.49 --share oxe=0.49 --share rh20t=0.02 --out metadata/C/weights.json
 """
 from __future__ import annotations
 

@@ -17,7 +17,6 @@ start inside the chosen episode and nothing else; without one every draw is as b
 from __future__ import annotations
 
 import bisect
-import hashlib
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -466,7 +465,8 @@ class MixtureRule:
 
     A family's share is family_shares(rows per family, exponent, fixed); inside a family the
     directories share it in proportion to their rows, so every directory of a family carries
-    one manifest weight. The data group states the rule (config/data/gd7.yaml mixture).
+    one manifest weight. The data group states the rule (config/data/action_pretrain.yaml
+    mixture).
     """
 
     exponent: float
@@ -483,7 +483,7 @@ class MixtureRule:
             raise ValueError(
                 f"data.train.mixture is missing {missing} and holds unknown {extra}.\n"
                 "Expected exactly exponent, families and (optionally) fixed.\n"
-                "State the rule as config/data/gd7.yaml does, or set mixture to null."
+                "State the rule as config/data/action_pretrain.yaml does, or set mixture to null."
             )
         families = {str(name): tuple(str(source) for source in sources)
                     for name, sources in dict(block["families"]).items()}
@@ -620,9 +620,17 @@ def permute(position: int, size: int, key: int) -> int:
             return value
 
 
-def _name_key(name: str) -> int:
-    """A directory's own 64-bit key, from its name (stable when other directories come and go)."""
-    return int.from_bytes(hashlib.sha256(name.encode("utf-8")).digest()[:8], "big")
+def name_key(name: str) -> int:
+    """A 64-bit key from a name (stable when other directories come and go).
+
+    The UTF-8 bytes folded through _mix64 eight at a time, then the length, so
+    the key is the same on every platform and in every process.
+    """
+    data = name.encode("utf-8")
+    key = 0
+    for start in range(0, len(data), 8):
+        key = _mix64(key ^ int.from_bytes(data[start:start + 8], "little"))
+    return _mix64(key ^ len(data))
 
 
 def quotas(mass: list[float], total: int) -> list[int]:
@@ -696,7 +704,7 @@ def build_row_plan(plan: MixturePlan, epoch_samples: int, *, seed: int) -> RowPl
     # seed with a shorter pass, and keyed by the seed alone its first wrap would be a prefix of
     # stage 1's, so a family drawn below its rows in stage 1 would see only those rows again.
     seed_key = _mix64(_mix64(_mix64(int(seed)) ^ 0x524F_5753) ^ int(epoch_samples))
-    keys = tuple(_mix64(seed_key ^ _name_key(name)) for name in plan.names)
+    keys = tuple(_mix64(seed_key ^ name_key(name)) for name in plan.names)
     return RowPlan(int(epoch_samples), tuple(split), tuple(offsets),
                    tuple(int(count) for count in plan.rows.tolist()), keys,
                    _mix64(seed_key ^ _POSITION_TAG))

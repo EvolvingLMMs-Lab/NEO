@@ -1,18 +1,17 @@
 """Explicit post-train frame support. Generic loaders retain their existing draw."""
 from __future__ import annotations
 
-import hashlib
 import json
 from dataclasses import replace
 
 from .conditioning import parse_frame_ref
+from .mixture import name_key
 
 
 def choose(choices, *, seed, directory, episode_id, sample=None):
     """Stable across workers, row order, passes and resume; no Python hash/RNG state."""
     identity = json.dumps([int(seed), directory, int(episode_id), sample], separators=(",", ":"))
-    number = int.from_bytes(hashlib.sha256(identity.encode()).digest()[:8], "big")
-    return tuple(choices[number % len(choices)])
+    return tuple(choices[name_key(identity) % len(choices)])
 
 
 def configure(manifest, mode, frame_set, draw, pin_keeps_other_poses):

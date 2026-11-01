@@ -10,13 +10,13 @@ Under NARROW_SPAN of its stroke observed, a directory is flagged; under
 MIN_DECLARED_COVERAGE by all its directories, a declaration is refused.
 
 Usage:
-    python tools/measure_gripper_polarity.py --root /corpus --inventory prep/inventory.jsonl \
-        --kept prep/kept.jsonl --layouts config/layouts/gd7.json --out prep/gripper.json
+    python tools/measure_gripper_polarity.py --root /corpus --inventory metadata/C/inventory.jsonl \
+        --kept metadata/C/kept.jsonl --layouts config/layouts/action_pretrain.json \
+        --out metadata/C/gripper.json
 """
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import logging
 import multiprocessing
@@ -245,9 +245,11 @@ def within(name: str, stroke: tuple[float, float], seen: tuple[float, float]) ->
 
 
 def declaration_of(layout: layout_table.Layout, block: dict[str, Any]) -> str:
-    """The gripper block a directory resolves to: its source and the block's own digest."""
-    digest = hashlib.sha256(json.dumps(block, sort_keys=True).encode("utf-8")).hexdigest()
-    return f"{layout.source}:{digest[:12]}"
+    """The gripper block a directory resolves to: its source and the block itself.
+
+    Directories whose blocks are equal, value for value, share one declaration.
+    """
+    return f"{layout.source}:{json.dumps(block, sort_keys=True, separators=(',', ':'))}"
 
 
 def measure(root: Path, directory: str, episodes: list[dict[str, Any]],

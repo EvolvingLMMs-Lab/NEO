@@ -132,7 +132,7 @@ checks fail.
 |---|---|
 | [Preprocessing guide](docs/preprocessing.md) | Filtering rules, commands and metadata contracts |
 | [Dataset card](data_release/DATASET_CARD.md) | Corpus inventory, masks and verification status |
-| [Release preparation](data_release/README.md) | Source inventory and private upload preparation |
+| [Data release](data_release/README.md) | Dataset layout, source inventory and release status |
 | [Upstream terms](data_release/UPSTREAM_TERMS.md) | Per-source licenses and redistribution requirements |
 
 Model checkpoints and dataset payloads are not included in this repository.

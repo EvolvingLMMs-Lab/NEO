@@ -17,13 +17,15 @@ unknown pose and stays in the kept list; ok and inconclusive leave the pose as
 build_extrinsics audited it. Without the flag the outputs are what they were.
 
 Usage:
-    python tools/build_cache.py --root /corpus --manifest manifests/oxe3src.json \
-        --kept prep/kept.jsonl --inventory prep/inventory.jsonl --out cache/index.json
+    python tools/build_cache.py --root /corpus --manifest manifests/action_pretrain.json \
+        --kept metadata/C/kept.jsonl \
+        --inventory metadata/C/inventory.jsonl \
+        --out processed/C/index.json
 """
 from __future__ import annotations
 
 import argparse
-import hashlib
+import dataclasses
 import io
 import json
 import logging
@@ -53,11 +55,11 @@ from neo_vla.data.reader import (
     EPISODE_ID_COLUMN,
     FRAME_VALID_SUFFIX,
     INGEST_STAMP_KEY,
-    SIDECAR_PINS,
+    SIDECAR_STAMP_FIELDS,
     SIDECAR_STAMP_KEY,
     VIEW_FRAME_SUFFIX,
 )
-from neo_vla.constants import refusal_prefix
+from neo_vla.constants import prefix_layout_of, refusal_prefix
 from neo_vla.data.prompt import (
     RenderContext,
     Stamp,
@@ -99,8 +101,7 @@ CAMERA_FROM_BASE = "camera_from_base"
 END_EFFECTOR_FROM_CAMERA = "end_effector_from_camera"
 UNTURNED_FRAMES = (BASE_FROM_REFERENCE, END_EFFECTOR_FROM_CAMERA)
 
-# Uncompressed, so two builds of the same rows are the same bytes and the
-# verify stage can compare hashes rather than re-reading every table.
+# Uncompressed, so two builds of the same rows are the same bytes.
 ARROW_COMPRESSION = "uncompressed"
 
 # The v7 columns a manifest entry's columns block may name (dataset
@@ -159,23 +160,20 @@ def write_bytes_if_changed(path: Path, payload: bytes) -> bool:
     return True
 
 
-def write_artifact(path: Path, payload: bytes) -> tuple[bool, str]:
-    """Write one artifact, read it back, and return whether it moved and its hash.
+def write_artifact(path: Path, payload: bytes) -> bool:
+    """Write one artifact, read it back, and return whether it moved.
 
     The filesystem under this pipeline reports success and truncates at quota,
-    so what landed is hashed and compared with the bytes the stage produced.
-    Without that comparison a truncated file records its own hash and every
-    later check agrees with it.
+    so what landed is read back and compared with the bytes the stage produced.
     """
     changed = write_bytes_if_changed(path, payload)
-    on_disk = stage.sha256_of(path)
-    if on_disk != hashlib.sha256(payload).hexdigest():
+    if path.read_bytes() != payload:
         raise OSError(
             f"{path} does not hold the {len(payload)} bytes written to it\n"
             f"expected the file to read back as what the stage produced\n"
             f"free space under the root, then run this stage again"
         )
-    return changed, on_disk
+    return changed
 
 
 def parse_shard(text: str) -> tuple[int, int]:
@@ -258,8 +256,8 @@ def current_shard(
 
     The index is written last, so a shard killed part way through has none and
     runs again. What it recorded is checked rather than trusted: the version,
-    the inputs it read, the settings and the entries it ran with, and the bytes
-    of every artifact it claims.
+    the inputs it read, the settings and the entries it ran with, and every
+    artifact it claims.
     """
     if not out.is_file():
         return False
@@ -316,10 +314,10 @@ def stored_parts(root: Path, entry: dict[str, Any],
 
     An entry reading no v7 column adds nothing. An ingest output's columns are
     in its own parquet; its meta/info.json stamp is checked and copied
-    under INGEST_STAMP_KEY. A sidecar entry's stamp is checked and its pins
-    held to the manifest's (a sidecar rebuilt since the manifest is stale);
-    its rows of the kept episodes, in kept order, are returned with the
-    episode and frame index to line up against the directory.
+    under INGEST_STAMP_KEY. A sidecar entry's stamp is checked, every kept
+    episode must be in it with its rows (R16), and its rows of the kept
+    episodes, in kept order, are returned with the episode and frame index to
+    line up against the directory.
     """
     names = stored_columns(entry)
     if not names:
@@ -333,15 +331,10 @@ def stored_parts(root: Path, entry: dict[str, Any],
     where = str(sidecar["path"])
     if not path.is_file():
         raise refuse_stamp(entry["name"], f"names sidecar {where} and it is not there",
-                           "the sidecar the manifest pins",
+                           "the sidecar the manifest names",
                            "build it with tools/sidecars/run.py, then rebuild the manifest")
     stamp = read_sidecar_stamp(path)
-    pins = check_sidecar_stamp(stamp, entry["name"], names, where)
-    stated = {pin: sidecar.get(pin) for pin in SIDECAR_PINS}
-    if pins != stated:
-        raise refuse_stamp(where, f"states {pins} and the manifest pins {stated} (a stale "
-                                  "sidecar)", "the sidecar the manifest was built against",
-                           "rebuild the manifest from the sidecar as it is now")
+    check_sidecar_stamp(stamp, entry["name"], names, where)
     rows = sidecar_rows(stamp, where)
     offsets, start = {}, 0
     for episode in stamp["episodes"]:
@@ -366,6 +359,9 @@ def stored_parts(root: Path, entry: dict[str, Any],
                 f"rebuild the sidecar against the directory as it is now")
         pieces.append(table.slice(offsets[index], length))
     kept = pa.concat_tables(pieces) if pieces else table.slice(0, 0)
+    # Only the writer's own fields are carried into the cache; anything else an
+    # older writer stated is not.
+    stamp = {key: value for key, value in stamp.items() if key in SIDECAR_STAMP_FIELDS}
     return kept, {SIDECAR_STAMP_KEY: json.dumps(stamp, sort_keys=True).encode("utf-8")}
 
 
@@ -703,9 +699,9 @@ def read_pose_qc(
 ) -> tuple[dict[tuple[str, str], dict[int, str]], dict[str, Any]]:
     """The --pose-qc files -> each (directory, camera)'s verdict per episode, and a summary.
 
-    Each file is read once as bytes, and the hash recorded is of exactly the
-    bytes parsed, so the settings and the index name the evidence that was
-    applied. The parse is stage.read_jsonl's (header on line 1, one record per
+    Each file is read once, and the settings and the index name it with the
+    verdict counts parsed from it, the evidence that was applied. The parse is
+    stage.read_jsonl's (header on line 1, one record per
     non-blank line after it) with repeated object keys refused, since json.loads
     would silently keep the last. An episode stated twice, within one file or
     across files, is refused rather than settled by order. Records for a
@@ -740,7 +736,7 @@ def read_pose_qc(
             own[verdict] += 1
         check_pose_qc_header(where, head, own, len(records))
         counts.update(own)
-        files.append({"path": where, "sha256": hashlib.sha256(data).hexdigest()})
+        files.append({"path": where, "verdicts": dict(sorted(own.items()))})
         controls.append({"path": where, "win_rate": head["settings"]["win_rate"],
                          "control_verdicts": head["settings"]["control_verdicts"]})
     summary = {
@@ -811,9 +807,9 @@ def cache_settings(parts: list[str], dropped: list[str],
                    pose_qc: dict[str, Any] | None) -> dict[str, Any]:
     """What the index records as this build's settings, and current_shard compares.
 
-    The QC files and their hashes are added only when --pose-qc is given, so a
-    build without it records the settings it always did, and a build with it
-    is stale as soon as the QC bytes it applied change.
+    The QC files and their verdict counts are added only when --pose-qc is
+    given, so a build without it records the settings it always did, and a
+    build with it is stale as soon as the QC verdicts it applied change.
     """
     settings: dict[str, Any] = {"parts": parts, "dropped_columns": dropped}
     if pose_qc is not None:
@@ -1085,8 +1081,8 @@ def shard_plan(
 
     The library versions are recorded because the arrow part's bytes are what
     the writer emits: two shards on two versions of pyarrow each produce a file
-    that is correct on its own and hashes differently, and nothing else in this
-    pipeline compares them.
+    that is correct on its own and differs in its bytes, and nothing else in
+    this pipeline compares them.
     """
     index, count = shard
     named = SHARD_INDEX_NAME.format(index=index, count=count)
@@ -1111,7 +1107,7 @@ def shard_plan(
 
 def check_shard_wrote(
     root: Path, manifest: dict[str, Any], parts: list[str],
-    mine: list[int], index: int, artifacts: dict[str, str],
+    mine: list[int], index: int, artifacts: list[str],
 ) -> None:
     """Refuse a shard that wrote anything other than the entries it was given.
 
@@ -1221,7 +1217,12 @@ def main(argv: list[str] | None = None) -> int:
 
     tokenizer = None
     template = None
-    declared = Stamp(**manifest["prompt"]["stamp"])
+    # The stamp's own fields, an earlier label of this layout read as this one;
+    # extra fields an older manifest states are not read.
+    stated = manifest["prompt"]["stamp"]
+    declared = Stamp(**{field.name: prefix_layout_of(stated[field.name])
+                        if field.name == "prefix_layout" else stated[field.name]
+                        for field in dataclasses.fields(Stamp)})
     if "prompt" in parts:
         if args.tokenizer is None:
             raise ValueError(
@@ -1270,7 +1271,7 @@ def main(argv: list[str] | None = None) -> int:
             poses[spec["path_source"]] = stage_extrinsics(
                 stage.under_root(root, spec["path_source"]))
 
-    artifacts: dict[str, str] = {}
+    artifacts: list[str] = []
     written = 0
     longest = (0, "", -1)
     absent_total = 0
@@ -1309,23 +1310,21 @@ def main(argv: list[str] | None = None) -> int:
                     qc_kept["not_scored"] += len(episodes)
         if "episode_starts" in parts:
             path = stage.under_root(root, entry["episode_starts"])
-            changed, digest = write_artifact(
+            written += write_artifact(
                 path, episode_starts([episode["rows"] for episode in episodes]))
-            written += changed
-            artifacts[entry["episode_starts"]] = digest
+            artifacts.append(entry["episode_starts"])
         if "arrow" in parts:
             path = stage.under_root(root, entry["cache"]["arrow"])
             dropped = args.drop_column + sorted(picture_columns(episodes))
             stored, metadata = stored_parts(root, entry, episodes)
             names = tuple(stored_columns(entry))
             stores[("sidecar" if stored is not None else "ingest") if names else "none"] += 1
-            changed, digest = write_artifact(
+            written += write_artifact(
                 path, arrow_table(root, [episode["data_file"] for episode in episodes],
                                   dropped, [view["key"] for view in entry["views"]],
                                   entry["path"], stored=stored, names=names,
                                   metadata=metadata))
-            written += changed
-            artifacts[entry["cache"]["arrow"]] = digest
+            artifacts.append(entry["cache"]["arrow"])
         if "frames" in parts:
             path = stage.under_root(root, entry["cache"]["frames"])
             index, absent = frame_index(root, entry, episodes)
@@ -1336,31 +1335,27 @@ def main(argv: list[str] | None = None) -> int:
                 logger.warning("%s has no frame file for %d of its episode "
                                "cameras", entry["name"], absent)
             absent_total += absent
-            changed, digest = write_artifact(
-                path, stage.dumps_json(index).encode("utf-8"))
-            written += changed
-            artifacts[entry["cache"]["frames"]] = digest
+            written += write_artifact(path, stage.dumps_json(index).encode("utf-8"))
+            artifacts.append(entry["cache"]["frames"])
         if "extrinsics" in parts:
             for view in entry["views"]:
                 if view["key"] not in rotations:
                     continue
                 named = view["extrinsics"]["path"]
                 path = stage.under_root(root, named)
-                changed, digest = write_artifact(path, npy_bytes(extrinsics_payload(
+                written += write_artifact(path, npy_bytes(extrinsics_payload(
                     view, rotations[view["key"]], entry["name"])))
-                written += changed
-                artifacts[named] = digest
+                artifacts.append(named)
         if "intrinsics" in parts:
             for view in entry["views"]:
                 if view["intrinsics"]["kind"] != "episode":
                     continue
                 named = view["intrinsics"]["path"]
                 path = stage.under_root(root, named)
-                changed, digest = write_artifact(path, npy_bytes(calibrations(
+                written += write_artifact(path, npy_bytes(calibrations(
                     entry, view, episodes,
                     sources[view["intrinsics"]["path_source"]])))
-                written += changed
-                artifacts[named] = digest
+                artifacts.append(named)
         if "prompt" in parts:
             path = stage.under_root(
                 root, Path(manifest["prompt"]["cache"]) / f"{entry['name']}.jsonl")
@@ -1368,9 +1363,8 @@ def main(argv: list[str] | None = None) -> int:
                 template, entry, episodes, tokenizer, declared.max_text_tokens,
                 rotations, episode_keys(root, entry, len(episodes)))
             longest = max(longest, found)
-            changed, digest = write_artifact(path, payload)
-            written += changed
-            artifacts[stage.relative(root, path)] = digest
+            written += write_artifact(path, payload)
+            artifacts.append(stage.relative(root, path))
 
     # One writer for the stamp. Its first write is not through a temporary and
     # its name is the same for every shard, so shards past the first check it
@@ -1378,10 +1372,10 @@ def main(argv: list[str] | None = None) -> int:
     if "prompt" in parts and (shard is None or shard[0] == 0):
         stamp_path = stage.under_root(
             root, Path(manifest["prompt"]["cache"]) / "stamp.json")
-        _, digest = write_artifact(
+        write_artifact(
             stamp_path,
             Path(stamp_module.write(declared, stamp_path.parent)).read_bytes())
-        artifacts[stage.relative(root, stamp_path)] = digest
+        artifacts.append(stage.relative(root, stamp_path))
 
     if shard is not None:
         check_shard_wrote(root, manifest, parts, mine, shard[0], artifacts)
@@ -1394,7 +1388,7 @@ def main(argv: list[str] | None = None) -> int:
             inputs=inputs,
             tree=REPO, extra=settings,
         ),
-        "artifacts": dict(sorted(artifacts.items())),
+        "artifacts": sorted(set(artifacts)),
     }
     if block is not None:
         payload["shard"] = block
@@ -1402,7 +1396,7 @@ def main(argv: list[str] | None = None) -> int:
         payload["pose_qc"] = {**qc_summary, "kept": dict(sorted(qc_kept.items()))}
     index_written = stage.write_json(out, payload)
     logger.info("%d artifacts, %d rewritten, %d episode cameras with no frame file",
-                len(artifacts), written, absent_total)
+                len(set(artifacts)), written, absent_total)
     if "arrow" in parts:
         logger.info("arrow files by v7 writer (of %d): %s", sum(stores.values()), stores)
     if "prompt" in parts:

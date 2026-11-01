@@ -3,18 +3,24 @@
 Each stage is a separate program and is run as one, so the pipeline has no
 private path into any stage that the command line does not have. What makes it
 resumable is the plan file: it records the exact arguments each stage ran with,
-and a stage re-runs when its arguments differ, when its output is missing, or
-when any input or artifact it recorded a hash for has changed. A run that fails
-keeps the plan for the stages that did run, and only those.
+and a stage re-runs when its arguments or tool version differ, or when its
+output, an input or an artifact it recorded is missing. Contents are not
+compared: after editing an input in place, pass --force, or --only with the
+stages that read it. A run that fails keeps the plan for the stages that did
+run, and only those.
 
 Verification always runs, because it has no output to compare and its whole job
 is to disagree with what the earlier stages believe.
 
 Usage:
     python tools/prepare_data.py --root /corpus --dirs-file dirs.txt \
-        --layouts config/layouts/gd7.json --corpus gd7_tokens_nobw \
+        --layouts config/layouts/action_pretrain.json --corpus action_pretrain \
         --calib agibot=calib/agibot_intrinsics --calib-dirs agibot=agibot.txt \
         --share agibot=0.49 --share oxe=0.49 --share rh20t=0.02
+
+Every corpus keeps its manifest at manifests/<corpus>.json, its stage records,
+normaliser and sidecars under metadata/<corpus>/ and its caches under
+processed/<corpus>/, unless --metadata-dir or --processed-dir says otherwise.
 """
 from __future__ import annotations
 
@@ -29,7 +35,7 @@ from typing import Any
 
 import stage
 
-from neo_vla.constants import TEMPLATE_MAJOR
+from neo_vla.constants import METADATA_DIR, PROCESSED_DIR
 
 logger = logging.getLogger("prepare_data")
 
@@ -52,7 +58,7 @@ RETIRED_FLAGS = {
 }
 
 # Where the stages' repository configs live, relative to the repository.
-DEFAULT_TEMPLATE = f"config/prompt_template/neo_v{TEMPLATE_MAJOR}.yaml"
+DEFAULT_TEMPLATE = "config/prompt_template/policy.yaml"
 DEFAULT_PUBLISHED = "config/rates/oxe_published.json"
 DEFAULT_EMBODIMENTS = "config/embodiments.yaml"
 
@@ -171,12 +177,12 @@ def extrinsics_steps(args: argparse.Namespace) -> list[Step]:
 
 def intrinsics_file(args: argparse.Namespace, source: str) -> str:
     """Where one calibration source's records go."""
-    return f"{args.prep_dir}/intrinsics_{source}.jsonl"
+    return f"{args.metadata_dir}/intrinsics_{source}.jsonl"
 
 
 def extrinsics_file(args: argparse.Namespace, source: str) -> str:
     """Where one pose source's records go."""
-    return f"{args.prep_dir}/extrinsics_{source}.jsonl"
+    return f"{args.metadata_dir}/extrinsics_{source}.jsonl"
 
 
 def trajectory_arguments(args: argparse.Namespace) -> list[str]:
@@ -214,7 +220,7 @@ def plan_of(args: argparse.Namespace) -> list[Step]:
     build_embodiment, measure_gripper_polarity, build_manifest, build_cache,
     build_stats (the loader's targets over the built cache), verify_manifest.
     """
-    prep = args.prep_dir
+    prep = args.metadata_dir
     manifest = f"{args.manifest_dir}/{args.corpus}.json"
     normaliser = f"{prep}/embodiments.json"
     common = ["--root", str(args.root)]
@@ -268,7 +274,7 @@ def plan_of(args: argparse.Namespace) -> list[Step]:
         "build_embodiment": {
             "argv": common + [*kept, "--layouts", args.layouts,
                               "--embodiments", args.embodiments,
-                              "--arrays", f"{args.cache_dir}/embodiment",
+                              "--arrays", f"{args.processed_dir}/embodiment",
                               "--out", f"{prep}/embodiment.json"],
             "output": f"{prep}/embodiment.json"},
         "measure_gripper_polarity": {
@@ -287,7 +293,7 @@ def plan_of(args: argparse.Namespace) -> list[Step]:
                               "--embodiments", args.embodiments,
                               "--layouts", args.layouts,
                               "--corpus", args.corpus,
-                              "--cache-dir", args.cache_dir,
+                              "--cache-dir", args.processed_dir,
                               "--prompt-template", args.prompt_template,
                               "--prompt-cache", args.prompt_cache,
                               "--tokenizer-id", args.tokenizer_id,
@@ -300,12 +306,12 @@ def plan_of(args: argparse.Namespace) -> list[Step]:
             "argv": common + ["--manifest", manifest, *kept,
                               "--inventory", f"{prep}/inventory.jsonl",
                               "--parts", args.parts,
-                              "--out", f"{args.cache_dir}/index.json"]
+                              "--out", f"{args.processed_dir}/index.json"]
             + (["--tokenizer", args.tokenizer] if args.tokenizer else []),
-            "output": f"{args.cache_dir}/index.json"},
+            "output": f"{args.processed_dir}/index.json"},
         "build_stats": {
             "argv": common + ["--manifest", manifest, "--out", normaliser,
-                              "--cache-index", f"{args.cache_dir}/index.json",
+                              "--cache-index", f"{args.processed_dir}/index.json",
                               "--embodiments", args.embodiments,
                               "--quantiles", "1", "99",
                               "--band-alpha", str(args.band_alpha),
@@ -368,8 +374,8 @@ def child_environment() -> dict[str, str]:
 def stands(head: dict[str, Any], root: Path) -> bool:
     """Whether a recorded header still describes what its stage would write now.
 
-    A header another tool version wrote does not, whatever it hashes to: which
-    inputs a stage records is part of what the version names, and an output
+    A header another tool version wrote does not: which inputs a stage
+    records is part of what the version names, and an output
     written before a stage started recording one cannot be compared with what
     it would record today.
     """
@@ -383,8 +389,8 @@ def is_current(root: Path, entry: dict[str, Any], recorded: dict[str, Any] | Non
 
     The last of those is about the files rather than about the record of them: a
     stage that names artifacts, as the cache index does, is out of date when one
-    of them is gone or has been overwritten. Without it the driver the docs name
-    as the remedy for a damaged cache does nothing.
+    of them is gone. Without it the driver the docs name as the remedy for a
+    damaged cache does nothing.
     """
     if entry["output"] is None or recorded is None:
         return False
@@ -416,9 +422,12 @@ def parser() -> argparse.ArgumentParser:
     parser.add_argument("--corpus", required=True)
     parser.add_argument("--dir", action="append", default=[])
     parser.add_argument("--dirs-file")
-    parser.add_argument("--prep-dir", default="prep")
+    parser.add_argument("--metadata-dir",
+                        help=f"stage records and normaliser; default {METADATA_DIR}/<corpus>")
     parser.add_argument("--manifest-dir", default="manifests")
-    parser.add_argument("--cache-dir", default="cache")
+    parser.add_argument("--processed-dir",
+                        help=f"numeric, frame, camera and prompt caches; default "
+                             f"{PROCESSED_DIR}/<corpus>")
     parser.add_argument("--drop", action="append", default=[])
     parser.add_argument("--share", action="append", default=[])
     parser.add_argument("--trajectory-weights-dir",
@@ -443,10 +452,10 @@ def parser() -> argparse.ArgumentParser:
                         help="the manifest names them all, so omitting one fails verify")
     parser.add_argument("--tokenizer")
     parser.add_argument("--prompt-template", default=DEFAULT_TEMPLATE,
-                        help="the v7 artifact; it stamps the cache's prefix_layout, so it "
+                        help="the prompt template; it stamps the cache's prefix_layout, so it "
                              "must be the one for --intrinsics-mode (tokens)")
-    parser.add_argument("--prompt-cache", default="cache/prompt")
-    parser.add_argument("--tokenizer-id", default="unset")
+    parser.add_argument("--prompt-cache", help="default <processed dir>/prompt")
+    parser.add_argument("--tokenizer-id", default=os.environ.get("NEO_VLA_TOKENIZER_ID", "neo-2b"))
     parser.add_argument("--max-text-tokens", type=int, default=256)
     parser.add_argument("--n-slots", type=int, default=2,
                         help="model.action.n_slots, the slot count verify_manifest "
@@ -461,7 +470,7 @@ def parser() -> argparse.ArgumentParser:
                         help="the key table (neo_vla_embodiment_keys_v2): clause, stage, "
                              "ee_frame_fix and the joints, hand and body per key")
     parser.add_argument("--sidecars",
-                        help="the stage-1 sidecars' folder under the root (prep_<corpus>/"
+                        help="the stage-1 sidecars' folder under the root (metadata/<corpus>/"
                              "sidecars), for a layout whose v7 columns are a sidecar's")
     parser.add_argument("--history-blocked",
                         help="the RH20T blocked-history list, for the pretrain corpus only")
@@ -489,13 +498,24 @@ def parser() -> argparse.ArgumentParser:
     return parser
 
 
+def resolve_dirs(args: argparse.Namespace) -> argparse.Namespace:
+    """Fill the corpus's default metadata, processed and prompt-cache directories."""
+    if args.metadata_dir is None:
+        args.metadata_dir = f"{METADATA_DIR}/{args.corpus}"
+    if args.processed_dir is None:
+        args.processed_dir = f"{PROCESSED_DIR}/{args.corpus}"
+    if args.prompt_cache is None:
+        args.prompt_cache = f"{args.processed_dir}/prompt"
+    return args
+
+
 def main(argv: list[str] | None = None) -> int:
-    args = parser().parse_args(argv)
+    args = resolve_dirs(parser().parse_args(argv))
 
     logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
     args.root = stage.resolve_root(args.root)
     plan = plan_of(args)
-    plan_path = stage.under_root(args.root, f"{args.prep_dir}/plan.json")
+    plan_path = stage.under_root(args.root, f"{args.metadata_dir}/plan.json")
     previous = (stage.read_json(plan_path)["stages"]
                 if plan_path.exists() else {})
 

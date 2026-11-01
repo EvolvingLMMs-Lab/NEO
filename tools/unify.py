@@ -16,7 +16,6 @@ orders of magnitude too small.
 """
 from __future__ import annotations
 
-import hashlib
 import random
 from pathlib import Path
 from typing import Any, Iterator
@@ -115,8 +114,9 @@ def sample(episodes: list[dict[str, Any]], limit: int, seed: str) -> list[dict[s
 
 
 def stable_seed(text: str) -> int:
-    """A seed that is the same in every process, which hash() is not."""
-    return int(hashlib.sha256(text.encode("utf-8")).hexdigest()[:8], 16)
+    """A seed that is the same in every process, which hash() is not: the text's
+    UTF-8 bytes as one integer, which numpy's SeedSequence mixes into its state."""
+    return int.from_bytes(text.encode("utf-8"), "little")
 
 
 def kept_by_dataset(

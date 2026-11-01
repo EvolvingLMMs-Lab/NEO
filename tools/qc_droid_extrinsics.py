@@ -12,7 +12,7 @@ is scored again under a pose recorded in another lab, which reads as wrong.
 Usage:
     python tools/qc_droid_extrinsics.py --root /corpus --control \
         --calib calib/droid_extrinsics --dirs-file config/droid_dirs.txt \
-        --urdf <a Franka Panda URDF you supply> --out prep/qc_droid.jsonl
+        --urdf <a Franka Panda URDF you supply> --out metadata/C/qc_droid.jsonl
 """
 from __future__ import annotations
 
@@ -466,7 +466,7 @@ def main(argv: list[str] | None = None) -> int:
         extra={"directories": len(directories), "episodes": len(records),
                "threshold": args.threshold, "stride": STRIDE,
                "min_samples": MIN_SAMPLES, "blur_sigma_and_speed_are_rescaled": True,
-               "urdf": str(urdf), "urdf_sha256": stage.sha256_of(urdf),
+               "urdf": str(urdf),
                "verdicts": dict(sorted(counts.items())),
                "control_verdicts": dict(sorted(control_counts.items())),
                "score_percentiles": distribution(measured),

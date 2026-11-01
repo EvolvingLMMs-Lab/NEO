@@ -10,9 +10,9 @@ disagrees with the directory name or the env constant, and a measurement over
 zero rows refuse rather than fall back to NA.
 
 Usage:
-    python tools/declare_frequency.py --root /corpus --kept prep/kept.jsonl \
-        --layouts config/layouts/gd7.json --published config/rates/oxe_published.json \
-        --scale prep/scale.json --out prep/frequency.json
+    python tools/declare_frequency.py --root /corpus --kept metadata/C/kept.jsonl \
+        --layouts config/layouts/action_pretrain.json --published config/rates/oxe_published.json \
+        --scale metadata/C/scale.json --out metadata/C/frequency.json
 """
 from __future__ import annotations
 
@@ -302,7 +302,7 @@ def main(argv: list[str] | None = None) -> int:
     document = layout_table.load(inputs["layouts"])
     published = None
     if args.published:
-        # The table is a repository config; it is hashed from wherever it is.
+        # The table is a repository config; it is read from wherever it is.
         published_path = Path(args.published)
         if not published_path.is_absolute():
             published_path = (REPO / published_path) if (REPO / published_path).exists() \

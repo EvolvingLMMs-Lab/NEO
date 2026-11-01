@@ -9,14 +9,14 @@ lacks, an unknown robot, a length that disagrees, or an arrow or prompt id that
 is not the kept id. verify_corpus check (vii) reruns check_identity.
 
 Usage:
-    python tools/build_embodiment.py --root /corpus --kept prep/kept.jsonl \
-        --layouts config/layouts/gd7.json --embodiments config/embodiments.yaml \
-        --arrays cache/embodiment --out prep/embodiment.json [--manifest manifests/gd5.json]
+    python tools/build_embodiment.py --root /corpus --kept metadata/C/kept.jsonl \
+        --layouts config/layouts/action_pretrain.json --embodiments config/embodiments.yaml \
+        --arrays processed/C/embodiment --out metadata/C/embodiment.json \
+        [--manifest manifests/C.json]
 """
 from __future__ import annotations
 
 import argparse
-import hashlib
 import io
 import json
 import logging
@@ -266,7 +266,7 @@ def main(argv: list[str] | None = None) -> int:
 
     datasets: dict[str, Any] = {}
     claimed: dict[str, str] = {}
-    artifacts: dict[str, str] = {}
+    artifacts: list[str] = []
     episodes: Counter = Counter()
     directories: Counter = Counter()
     witnessed = 0
@@ -292,8 +292,8 @@ def main(argv: list[str] | None = None) -> int:
             embodiment, written = per_episode(root, directory, layout.name, records, document,
                                               witnesses, args.arrays)
             for path, payload in written.items():
-                _, digest = write_npy(stage.under_root(root, path), payload)
-                artifacts[path] = digest
+                write_npy(stage.under_root(root, path), payload)
+                artifacts.append(path)
             for key, count in embodiment["counts"].items():
                 episodes[key] += count
                 directories[key] += 1
@@ -318,7 +318,7 @@ def main(argv: list[str] | None = None) -> int:
                    "episodes": sum(episodes.values())},
         "keys": {key: {"episodes": episodes[key], "directories": directories[key]}
                  for key in sorted(episodes)},
-        "artifacts": artifacts,
+        "artifacts": sorted(artifacts),
         "datasets": datasets,
     }
     written = stage.write_json(out, payload)
@@ -332,16 +332,15 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def write_npy(path: Path, payload: bytes) -> tuple[bool, str]:
-    """Write an array's bytes unless the same bytes are there; return its sha256."""
-    digest = hashlib.sha256(payload).hexdigest()
+def write_npy(path: Path, payload: bytes) -> bool:
+    """Write an array's bytes unless the same bytes are there; return whether it wrote."""
     if path.exists() and path.read_bytes() == payload:
-        return False, digest
+        return False
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_bytes(payload)
     temporary.replace(path)
-    return True, digest
+    return True
 
 
 if __name__ == "__main__":

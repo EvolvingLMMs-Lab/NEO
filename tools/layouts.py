@@ -289,7 +289,7 @@ def policy_block(layout: Layout, block: str) -> dict[str, Any]:
         raise KeyError(
             f"{layout.name} ({layout.directory}) states no {block} block\n"
             f"expected a layout file with a {block} policy for source {layout.source!r} or "
-            f"this dataset (config/layouts/gd7.json carries oxe3src_gd6.json's)\n"
+            f"this dataset (config/layouts/action_pretrain.json is a complete example)\n"
             f"write the {block} policy into the layout file"
         )
     return dict(found)

@@ -2,8 +2,8 @@
 
 One root. Every path a stage writes is stated relative to it, so moving the
 corpus changes one environment variable and nothing else. Every stage output
-carries a provenance header (stage.header), and the hashes
-in it are what make a stale output visible to the verify stage.
+carries a provenance header (stage.header): the tool, its version, the commit
+and the root-relative inputs it read.
 
 Writing is idempotent by comparison, not by luck: a stage serialises its
 payload without the timestamp, compares that with what is already on disk, and
@@ -13,7 +13,6 @@ thing that moves the file.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import subprocess
@@ -35,10 +34,6 @@ TOOL_VERSION = "2.0.0"
 # stages that read a directory list already skip a line starting with it, so a
 # listing carries the same header the json outputs do without changing them.
 LISTING_COMMENT = "# "
-
-# Bytes read at a time when hashing. Large enough that a 137 MB sidecar is one
-# pass over the page cache rather than a million syscalls.
-HASH_BLOCK = 1 << 20
 
 # A LIBERO-family directory: its source or name begins with one of these
 # (config/layouts/libero_v7.json gives libero/, libero_nom/ and the tpr6 legs
@@ -77,52 +72,6 @@ def git_commit(tree: Path) -> str:
     if status.returncode != 0 or status.stdout.strip():
         return "dirty"
     return head.stdout.strip()
-
-
-def sha256_of(path: Path) -> str:
-    """The hash of one file, as the provenance header records it."""
-    digest = hashlib.sha256()
-    with open(path, "rb") as handle:
-        for block in iter(lambda: handle.read(HASH_BLOCK), b""):
-            digest.update(block)
-    return digest.hexdigest()
-
-
-def sha256_of_tree(path: Path) -> str:
-    """The hash of a directory: its root-relative file names and their bytes.
-
-    A directory input is hashed as a whole so that adding a file to it changes
-    the header, which a per-file hash of a listing taken earlier would not.
-    """
-    digest = hashlib.sha256()
-    for found in sorted(p for p in path.rglob("*") if p.is_file()):
-        digest.update(str(found.relative_to(path)).encode("utf-8"))
-        digest.update(sha256_of(found).encode("ascii"))
-    return digest.hexdigest()
-
-
-def sha256_of_source(tree: Path) -> str:
-    """The hash of a working tree's source, for a tree no commit names.
-
-    Hidden entries and compiled bytecode are left out. A checkout's index and
-    its .pyc files move when the source has not, and this hash answers only
-    whether the source has, so that "dirty" can still be told apart from
-    "dirty and edited since".
-    """
-    digest = hashlib.sha256()
-    for found in sorted(_source_files(tree)):
-        digest.update(str(found.relative_to(tree)).encode("utf-8"))
-        digest.update(sha256_of(found).encode("ascii"))
-    return digest.hexdigest()
-
-
-def _source_files(tree: Path) -> Iterable[Path]:
-    for found in tree.rglob("*"):
-        parts = found.relative_to(tree).parts
-        if any(part.startswith(".") or part == "__pycache__" for part in parts):
-            continue
-        if found.is_file():
-            yield found
 
 
 def resolve_root(root: str | os.PathLike) -> Path:
@@ -164,8 +113,8 @@ def refuse_write_into_input(out: Path, inputs: Iterable[Path]) -> None:
     """Raise when the output would land inside a tree the stage reads.
 
     The raw trees are read-only for this pipeline. A stage that writes into one
-    changes the thing its own hashes describe, and the next run's header would
-    disagree with the run that produced the data. Both sides are resolved
+    changes the inputs its own header names, and the next run would read
+    something other than what produced the data. Both sides are resolved
     through their links here, so a staged tree cannot be written into by way of
     the path it was downloaded to.
     """
@@ -190,17 +139,13 @@ def header(
     tree: Path,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """The provenance header, with every input hashed and named by the root."""
-    hashes: dict[str, str] = {}
-    for path in sorted(inputs.values(), key=str):
-        key = relative(root, Path(path))
-        hashes[key] = sha256_of_tree(path) if Path(path).is_dir() else sha256_of(path)
+    """The provenance header, with every input named by its root-relative path."""
     record = {
         "schema_version": SCHEMA_VERSION,
         "tool": tool,
         "tool_version": TOOL_VERSION,
         "git_commit": git_commit(tree),
-        "inputs": hashes,
+        "inputs": sorted(relative(root, Path(path)) for path in inputs.values()),
         "created": None,
     }
     if extra:
@@ -288,9 +233,9 @@ def write_jsonl(path: Path, head: dict[str, Any], records: Sequence[Any], *,
 def write_listing(path: Path, head: dict[str, Any], lines: Sequence[str]) -> bool:
     """Write one text listing, header first. False when it already matches.
 
-    The listing a later stage takes as its directory list, so it is hashed as
-    that stage's input: it has to be byte-stable on unchanged input for the
-    same reason every other stage output is.
+    The listing a later stage takes as its directory list, so it is that
+    stage's input: it has to be byte-stable on unchanged input for the same
+    reason every other stage output is.
     """
     tail = "".join(f"{line}\n" for line in lines)
     body = LISTING_COMMENT + dumps_line({"provenance": head}) + tail
@@ -322,33 +267,22 @@ def read_json(path: Path) -> dict[str, Any]:
 
 
 def check_inputs_match(head: dict[str, Any], root: Path) -> list[str]:
-    """Which of a header's recorded inputs no longer hash to what it recorded."""
-    stale = []
-    for name, recorded in sorted(head["inputs"].items()):
-        path = root / name
-        if not path.exists():
-            stale.append(f"{name}: missing")
-            continue
-        now = sha256_of_tree(path) if path.is_dir() else sha256_of(path)
-        if now != recorded:
-            stale.append(f"{name}: {recorded[:12]} recorded, {now[:12]} on disk")
-    return stale
+    """Which of a header's recorded inputs are no longer under the root.
+
+    The header names its inputs; an older header maps each to a checksum,
+    which is not read. Content is not compared: after editing an input in
+    place, run its stages again (prepare_data.py --force or --only).
+    """
+    return [f"{name}: missing" for name in sorted(head["inputs"]) if not (root / name).exists()]
 
 
 def check_artifacts_match(payload: dict[str, Any], root: Path) -> list[str]:
-    """Which of a stage output's own artifacts no longer hash to what it wrote.
+    """Which of a stage output's own artifacts are no longer on disk.
 
-    The inputs half says the stage would reach the same answer again; this says
-    the answer is still on disk. A stage output that names no artifacts states
-    nothing about any file and returns nothing.
+    The inputs half says what the stage read; this says the answer is still
+    there. A stage output that names no artifacts states nothing about any
+    file and returns nothing. An older output maps each artifact to a
+    checksum, which is not read.
     """
-    stale = []
-    for name, recorded in sorted(payload.get("artifacts", {}).items()):
-        path = root / name
-        if not path.exists():
-            stale.append(f"{name}: missing")
-            continue
-        now = sha256_of(path)
-        if now != recorded:
-            stale.append(f"{name}: {recorded[:12]} recorded, {now[:12]} on disk")
-    return stale
+    return [f"{name}: missing" for name in sorted(payload.get("artifacts", ()))
+            if not (root / name).exists()]

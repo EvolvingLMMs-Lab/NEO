@@ -1,7 +1,7 @@
 # The embodiment keys: which normaliser entry a directory's actions and state go
 # through, and the clause section 3 of every prompt of that key reads. One key
-# per embodiment, so a clause names exactly one set of q01/q99 numbers: the
-# entry digest in embodiments.json covers the clause, and the runner and
+# per embodiment, so a clause names exactly one set of q01/q99 numbers: an
+# entry in embodiments.json is compared with its clause, and the runner and
 # build_manifest refuse two keys that share one.
 #
 # Read by tools/build_embodiment.py (directory -> key, or episode -> key for
@@ -29,9 +29,9 @@
 #                 R), or null. Only agibot_g1 has one: its fingers close along
 #                 EE x where every other stage-1 key with state closes along
 #                 EE y; Rz(+90 deg) puts image-right at EE -y,
-#                 as DROID and RH20T. It enters the entry digest.
+#                 as DROID and RH20T. It is part of the entry's identity.
 #   action_from   finetune keys only: the pretrain key whose action entry this
-#                 key copies, digest for digest
+#                 key copies, value for value
 #   action_from_groups  with action_from only: the action groups copied
 #                 (neo_vla.data.embodiment.ACTION_GROUPS: joints, ee, hand; ee is
 #                 dpos, drot and the gripper, the columns every benchmark
@@ -45,7 +45,7 @@
 #                 odometry, command, imu_yaw, still, none; torso and head the
 #                 joint names, or none where the source records no such part
 #                 (a body every dimension of which is none is UNKNOWN)
-#                 tools/key_table.py reads the three; every entry digest covers
+#                 tools/key_table.py reads the three; every entry identity holds
 #                 them (build_stats copies them into embodiments.json v2).
 #
 # Mixture masses (analytic trajectory weights; they sum to 1.0):

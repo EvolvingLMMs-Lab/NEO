@@ -56,8 +56,7 @@ def raw_root_of(directory: Path) -> Path:
         ) from None
 
 
-def episode_arrays(path: Path, rows: int, state: np.ndarray,
-                   digest: common.SourceDigest) -> dict[str, Any]:
+def episode_arrays(path: Path, rows: int, state: np.ndarray) -> dict[str, Any]:
     """One episode's joint state and command, checked against the directory's state."""
     with h5py.File(path, "r") as handle:
         stored = {name: (np.asarray(handle[name][:rows], dtype=np.float64)
@@ -86,7 +85,6 @@ def episode_arrays(path: Path, rows: int, state: np.ndarray,
                 "expected 7 joints on every row the episode keeps\n"
                 "check the source session"
             )
-        digest.array(value)
     return {"state": stored[JOINT_STATE], "command": stored[JOINT_COMMAND],
             "error": error}
 
@@ -99,7 +97,6 @@ def build(entry: dict[str, Any], directory: Path, raw_root: Path | None) -> dict
     columns = common.empty_columns(total, ARMS, command=True)
     episode_column = np.empty(total, dtype=np.int64)
     frame_column = np.empty(total, dtype=np.int64)
-    digest = common.SourceDigest()
     checks = {"episodes": len(episodes), "cartesian_error_max": 0.0,
               "state_missing_episodes": 0, "command_missing_episodes": 0}
     start = 0
@@ -108,9 +105,8 @@ def build(entry: dict[str, Any], directory: Path, raw_root: Path | None) -> dict
                               columns=["observation.state", common.FRAME_COLUMN])
         state = np.stack(table.column("observation.state").to_numpy(zero_copy_only=False))
         session = episode.record["droid_session"]
-        digest.text(session)
         arrays = episode_arrays(root / session / TRAJECTORY_FILE, episode.rows,
-                                state.astype(np.float64), digest)
+                                state.astype(np.float64))
         stop = start + episode.rows
         episode_column[start:stop] = episode.index
         frame_column[start:stop] = table.column(common.FRAME_COLUMN).to_numpy()
@@ -125,5 +121,4 @@ def build(entry: dict[str, Any], directory: Path, raw_root: Path | None) -> dict
         start = stop
     return {"episodes": episodes, "columns": columns, "episode_column": episode_column,
             "frame_column": frame_column, "described": DESCRIBED, "arms": ARMS,
-            "source_digest": digest.hexdigest(), "checks": checks,
-            "source_root": str(root)}
+            "checks": checks, "source_root": str(root)}

@@ -12,8 +12,9 @@ being predicted states the target's magnitude and does not exist at serving
 time. Episodes are the sampling unit and the error bar is a bootstrap over them.
 
 Usage:
-    python tools/measure_scale.py --root /corpus --inventory prep/inventory.jsonl \
-        --kept prep/kept.jsonl --layouts config/layouts/gd7.json --out prep/scale.json
+    python tools/measure_scale.py --root /corpus --inventory metadata/C/inventory.jsonl \
+        --kept metadata/C/kept.jsonl --layouts config/layouts/action_pretrain.json \
+        --out metadata/C/scale.json
 """
 from __future__ import annotations
 

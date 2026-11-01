@@ -1,5 +1,5 @@
 {
- "corpus": "gd7_tokens_nobw",
+ "corpus": "action_pretrain",
  "totals": {
   "directories": 2704,
   "episodes": 2231583,
@@ -173,14 +173,17 @@
   }
  ],
  "manifest": {
-  "path": "manifests/gd7_tokens_nobw.json",
-  "sha256": "7367f9c862ca5512378ae093e66ed785c9650a15b41c7f49b94a2d532ec90320"
+  "path": "manifests/action_pretrain.json",
+  "corpus": "action_pretrain",
+  "schema_version": 3,
+  "directories": 2704
  },
  "normaliser": {
-  "path": "prep_gd7_tokens_nobw/embodiments.json",
-  "sha256": "612852446612cd2180fabd840a7f61665bd3114306495bf56b1481c9ab547b4a"
+  "path": "metadata/action_pretrain/embodiments.json",
+  "schema": "neo_vla_embodiments_v2",
+  "embodiment_keys": 37,
+  "datasets_records": 2704
  },
- "build_commit": "9beb654ef40dfa3907a4b011216b472034737950",
  "episode_filter": {
   "drop_rules": [
    "data_file_missing",

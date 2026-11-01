@@ -26,8 +26,8 @@ prefix:
   init_anchor_rows: true                  # redraw the reserved <cam_k> rows, which ship near-identical
   # How camera calibration reaches the model: tokens puts twelve columns after
   # each <cam_k>, six for the calibration and six for the camera's rotation,
-  # one projection per column. It pairs with the prompt template whose major is
-  # constants.TEMPLATE_MAJOR; the corpus stamp names it and the loader refuses
+  # one projection per column. It pairs with config/prompt_template/policy.yaml,
+  # whose geometry is tokens; the corpus stamp names it and the loader refuses
   # a mismatch.
   intrinsics_mode: tokens
 

@@ -277,8 +277,8 @@ def initialise_from(
 ) -> str | None:
     """Start this run from another run's weights, and from nothing else of it.
 
-    Returns the digest of the init step's embodiments.json, the parent the
-    run's own file records, or None for a model that carries no such file.
+    Returns the init step directory, the parent the run's own embodiments.json
+    records, or None for a model that carries no such file.
     new_keys is the data group's data.new_keys: whether the run's embodiments
     file may hold keys the init step's does not (check_inherited).
 
@@ -307,12 +307,9 @@ def initialise_from(
 
     `skip` names key PREFIXES the checkpoint is not allowed to supply, so those
     modules keep their build init while everything else comes from the pretrain.
-    It exists to ask which PART of a pretrain carries an effect: ten gd5-initialised
-    LIBERO arms sit at 78-83 on the two-object libero_10 tasks against 90-92 for
-    no-pretrain arms, and the deficit survives every finetune knob AND survives
-    scrambling the expert's entire layer wiring -- which points at the few small
-    tensors that load identically regardless of arch (the action head and the
-    tokenizers) rather than at the expert. Dropping a prefix is only meaningful
+    It exists to ask which PART of a pretrain carries an effect, for example the
+    few small tensors that load identically regardless of arch (the action head
+    and the tokenizers) as against the expert. Dropping a prefix is only meaningful
     for a module the mode actually trains; a frozen one would sit at random init
     for the whole run instead of being relearned.
 
@@ -438,24 +435,31 @@ def read_step_meta(path: Path) -> dict:
     return checkpoint.read_meta(path)
 
 
-def read_step_embodiments(path: Path) -> tuple[dict, str]:
-    """A step's embodiments.json -> (the parsed document, its file digest).
+def read_step_embodiments(path: Path) -> dict:
+    """A step's embodiments.json, parsed.
 
-    Read after checkpoint.check_embodiments_file has held the bytes to the
-    digest meta.json names, so the stored entry digests are the ones the tree
-    that wrote the step computed.
+    Read after checkpoint.check_embodiments_file has held the file to the keys
+    meta.json names.
     """
     data = (Path(path) / constants.EMBODIMENTS_FILE).read_bytes()
-    return json.loads(data.decode("utf-8")), checkpoint.file_digest(data)
+    return json.loads(data.decode("utf-8"))
 
 
-def step_entry_digests(path: Path) -> tuple[dict[str, str], str | None, str]:
-    """A step's embodiments.json -> (entry digest by key, its parent, its file digest)."""
-    document, digest = read_step_embodiments(path)
-    entries = {
-        str(key): str(entry.get("digest")) for key, entry in document["embodiments"].items()
-    }
-    return entries, document.get("parent"), digest
+def step_identity(document: dict, key: str) -> dict | None:
+    """The identity of one key's entry in a step's embodiments document, or None."""
+    from ..data.embodiment import entry_identity
+
+    stored = (document.get("embodiments") or {}).get(key)
+    if stored is None:
+        return None
+    return entry_identity(stored, document.get("normaliser"))
+
+
+def step_parent(path: Path) -> str | None:
+    """The parent a step's embodiments.json records, as the embodiments reader keeps it."""
+    from ..data.embodiment import without_checksums
+
+    return without_checksums(read_step_embodiments(path)).get("parent")
 
 
 def check_copied_action(entry, stored: dict, where: str) -> None:
@@ -466,9 +470,9 @@ def check_copied_action(entry, stored: dict, where: str) -> None:
     action.from_groups names (every column when it names none), gripper_valid
     with the ee group, and SRC's mask, and writes action.from = SRC (V6 4.7,
     LIBERO's libero_franka_sim from franka_panda: the executed ee block, "same
-    numbers", its joints its own, U2 option (c)). The entry digest covers the
-    numbers and not the source, so a copied column edited after the copy, or
-    copied from another file, is caught here and nowhere else.
+    numbers", its joints its own). The entry identity holds the numbers and
+    not the source, so a copied column edited after the copy, or copied from
+    another file, is caught here and nowhere else.
     """
     from ..data.embodiment import inherited_columns
 
@@ -527,14 +531,14 @@ def check_copied_action(entry, stored: dict, where: str) -> None:
 
 
 def check_inherited(module, path: Path, where: str, *, new_keys: bool) -> str | None:
-    """V6 4.7 against the step a run starts or resumes from; returns the step file's digest.
+    """V6 4.7 against the step a run starts or resumes from; returns the step directory.
 
     R8 unless the run's file keeps the lineage:
     - the normaliser header is the step's (transform, quantiles, out-of-band rule
       and band alpha, which sets the band, the state clip and the decode clamp of
       every key, a new one included; 4.7b copies it from the init file);
-    - every key both files hold has the step's entry digest, numbers and clause
-      alike (4.7a);
+    - every key both files hold has the step's entry identity, numbers and
+      clause alike (4.7a);
     - a key new to the lineage is allowed only under new_keys (the data group's
       data.new_keys at init_from; never at a resume): stage 2 adds no key to
       stage 1's (V6 4.10(3)), a post-train or debug group does;
@@ -542,13 +546,15 @@ def check_inherited(module, path: Path, where: str, *, new_keys: bool) -> str | 
       holds that source's rows (check_copied_action).
     R9 when a key of the run has the clause of a different key of the step
     (4.7b: a clause distinct from every existing key's). A key the step has and
-    the run lacks is allowed. The digest returned becomes the run's parent. A
-    model without an embodiments file (the engine's test models) is skipped.
+    the run lacks is allowed. The directory returned becomes the run's parent.
+    A model without an embodiments file (the engine's test models) is skipped.
     """
+    from ..data.embodiment import identity_differs
+
     embodiments = vars(module).get("embodiments")
     if embodiments is None:
         return None
-    document, digest = read_step_embodiments(path)
+    document = read_step_embodiments(path)
     stored = document["embodiments"]
     header = document.get("normaliser")
     if header != embodiments.header:
@@ -565,10 +571,11 @@ def check_inherited(module, path: Path, where: str, *, new_keys: bool) -> str | 
         if held is None:
             continue
         compared.append(key)
-        if str(held.get("digest")) != entry.digest:
+        identity = step_identity(document, key)
+        if identity != entry.identity:
             raise ValueError(
-                f"{constants.refusal_prefix(8)} {where} normalised {key!r} through entry "
-                f"{held.get('digest')}; this run's file gives it {entry.digest}.\n"
+                f"{constants.refusal_prefix(8)} {where} normalised {key!r} through an entry "
+                f"this run's file differs from in {identity_differs(identity, entry.identity)}.\n"
                 "Expected an inherited key to keep its entry, numbers and clause alike "
                 "(V6 4.7a): the weights were trained on targets scaled by it.\n"
                 "Copy the init step's entry for this key into the run's embodiments file."
@@ -600,9 +607,9 @@ def check_inherited(module, path: Path, where: str, *, new_keys: bool) -> str | 
         "%s: R8 compared %d of this run's %d keys with the step's %d (%s); %d new to the "
         "lineage (%s); parent %s",
         where, len(compared), len(embodiments.entries), len(stored), compared[:8],
-        len(new), new[:8], digest,
+        len(new), new[:8], path,
     )
-    return digest
+    return str(path)
 
 
 def load_embodiments(cfg):
@@ -612,15 +619,13 @@ def load_embodiments(cfg):
         raise ValueError(
             "data.train.normaliser is not set for a model that normalises through an "
             "embodiments file.\n"
-            "Expected the corpus's prep_<corpus>/embodiments.json in every training data "
+            "Expected the corpus's metadata/<corpus>/embodiments.json in every training data "
             "group.\nSet data.train.normaliser; there is no default normaliser."
         )
     from ..data.embodiment import Embodiments
 
     loaded = Embodiments.load(str(path))
-    logger.info(
-        "embodiments: %d keys from %s (%s)", len(loaded.entries), path, loaded.file_digest
-    )
+    logger.info("embodiments: %d keys from %s", len(loaded.entries), path)
     return loaded
 
 
@@ -676,7 +681,7 @@ def check_shared_clauses(embodiments, summary: dict, lineage: dict | None = None
 def check_served_directories(embodiments, dataset) -> None:
     """Refuse a manifest directory the embodiments file has no datasets record for.
 
-    The server resolves a client's directory to its record digest (R4), so a
+    The server resolves a client's directory to its datasets record (R4), so a
     directory without one could be trained on and never served. The
     directories are the dataset's manifest's (RobotDataset.manifest.entries);
     a dataset that states no manifest, or one with no directory, is refused
@@ -780,12 +785,11 @@ def measure_fit(cfg, embodiments, dataset, *, step: Path | None = None) -> None:
     # A resume supplies its step explicitly; otherwise use the configured init.
     if step is None:
         step = OmegaConf.select(cfg, "trainer.init_from", default=None)
-    lineage = read_step_embodiments(Path(step))[0] if step is not None else {}
+    lineage = read_step_embodiments(Path(step)) if step is not None else {}
     summary = dataset.trained_summary()["keys"]
     for key in sorted(summary):
         entry = embodiments.entry(key)
-        stored = lineage.get("embodiments", {}).get(key)
-        inherited = stored is not None and stored.get("digest") == entry.digest
+        inherited = step_identity(lineage, key) == entry.identity
         frames = ((lineage.get("trained") or {}).get("keys", {}).get(key, {}).get("frames")
                   if inherited else None)
         run_frames = {frame for frame, share in summary[key].get("frames", {}).items()
@@ -908,7 +912,7 @@ def trained_stamp(cfg, summary: dict) -> dict:
     train_group = cfg.data.train
     return {
         "run": OmegaConf.select(cfg, "run_name", default=None),
-        "manifest_sha256": summary["manifest_sha256"],
+        "corpus": summary["corpus"],
         "keys": summary["keys"],
         "history": {
             "H": constants.HISTORY_SIZE,
@@ -964,10 +968,7 @@ def stamp_embodiments(cfg, module, dataset, run_dir: Path, parent: str | None,
     if distributed.is_rank_zero():
         target = Path(run_dir) / constants.EMBODIMENTS_FILE
         target.write_bytes(module.embodiments.dumps())
-        logger.info(
-            "embodiments: wrote %s (%s), parent %s", target,
-            checkpoint.file_digest(module.embodiments.dumps()), parent,
-        )
+        logger.info("embodiments: wrote %s, parent %s", target, parent)
 
 
 def check_resumed_rates(configured: list[float], scheduler, where: Path) -> None:
@@ -1239,7 +1240,7 @@ def run(cfg, run_dir: str | Path) -> int:
             logger.info("init_from %s: %s weights", init_from,
                         "EMA over raw" if use_ema else "raw (the model entry)")
             if vars(module).get("embodiments") is not None:
-                lineage = read_step_embodiments(init_from)[0]
+                lineage = read_step_embodiments(init_from)
         ema = build_ema(cfg, module, strategy_name)
     else:
         ema = build_ema(cfg, module, strategy_name)
@@ -1249,7 +1250,7 @@ def run(cfg, run_dir: str | Path) -> int:
             checkpoint.check_step(resume_from, module, f"resume checkpoint {resume_from}")
             check_inherited(module, resume_from, f"resume checkpoint {resume_from}",
                             new_keys=False)
-            parent = step_entry_digests(resume_from)[1]
+            parent = step_parent(resume_from)
         configured = [float(group["initial_lr"]) for group in optimizer.param_groups]
         start_step = checkpoint.load(
             resume_from, strategy, model, optimizer, scheduler, ema

@@ -173,8 +173,7 @@ def _read(handle: h5py.File, name: str) -> np.ndarray | None:
     return np.asarray(handle[name][()], dtype=np.float64)
 
 
-def episode_arrays(h5_path: Path, rows: int, state: np.ndarray,
-                   digest: common.SourceDigest) -> dict[str, Any]:
+def episode_arrays(h5_path: Path, rows: int, state: np.ndarray) -> dict[str, Any]:
     """One episode's joints and body rows, checked against the directory's state."""
     with h5py.File(h5_path, "r") as handle:
         timestamps = np.asarray(handle[TIMESTAMP][()], dtype=np.int64)
@@ -215,8 +214,6 @@ def episode_arrays(h5_path: Path, rows: int, state: np.ndarray,
                 "expected every h5 group on the timestamp's rows\n"
                 "check the source episode"
             )
-    for value in (timestamps, joints, waist, head, position, orientation):
-        digest.array(value)
     body = np.full((rows, 8), np.nan, dtype=np.float64)
     body[:, 0:3] = base_motion(timestamps, position, orientation)
     if waist is not None and waist.shape[1] >= 2:
@@ -262,7 +259,6 @@ def build(entry: dict[str, Any], directory: Path, raw_root: Path) -> dict[str, A
     columns = common.empty_columns(total, ARMS, command=False)
     episode_column = np.empty(total, dtype=np.int64)
     frame_column = np.empty(total, dtype=np.int64)
-    digest = common.SourceDigest()
     checks = {"episodes": len(episodes), "end_error_cm_max": 0.0, "end_source": {},
               "joints_missing_episodes": 0, "odometry_episodes": 0,
               "odometry_rows": 0, "moving_rows": 0, "moving_rows_read_still": 0}
@@ -272,9 +268,8 @@ def build(entry: dict[str, Any], directory: Path, raw_root: Path) -> dict[str, A
                               columns=["observation.state", common.FRAME_COLUMN])
         state = np.stack(table.column("observation.state").to_numpy(zero_copy_only=False))
         raw = episode.record["raw_file_name"]
-        digest.text(raw)
         arrays = episode_arrays(raw_root / raw / "proprio_stats.h5", episode.rows,
-                                state.astype(np.float64), digest)
+                                state.astype(np.float64))
         stop = start + episode.rows
         episode_column[start:stop] = episode.index
         frame_column[start:stop] = table.column(common.FRAME_COLUMN).to_numpy()
@@ -292,4 +287,4 @@ def build(entry: dict[str, Any], directory: Path, raw_root: Path) -> dict[str, A
         start = stop
     return {"episodes": episodes, "columns": columns, "episode_column": episode_column,
             "frame_column": frame_column, "described": DESCRIBED, "arms": ARMS,
-            "source_digest": digest.hexdigest(), "checks": checks}
+            "checks": checks}

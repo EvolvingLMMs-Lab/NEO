@@ -13,10 +13,10 @@ corpus stores. Agreeing with itself is not evidence and is reported as such.
 
 Usage:
     python tools/validate_intrinsics.py --root /corpus \
-        --intrinsics prep/intrinsics_agibot.jsonl \
-        --intrinsics prep/intrinsics_rh20t.jsonl \
-        --layouts config/layouts/gd7.json \
-        --out prep/intrinsics_validation.jsonl
+        --intrinsics metadata/C/intrinsics_agibot.jsonl \
+        --intrinsics metadata/C/intrinsics_rh20t.jsonl \
+        --layouts config/layouts/action_pretrain.json \
+        --out metadata/C/intrinsics_validation.jsonl
 """
 from __future__ import annotations
 

@@ -10,14 +10,13 @@ denominators. The file is written and validated through
 neo_vla.data.embodiment, the one implementation.
 
 Usage:
-    python tools/build_stats.py --root /corpus --manifest manifests/gd7_tokens_nobw.json \
+    python tools/build_stats.py --root /corpus --manifest manifests/action_pretrain.json \
         --quantiles 1 99 --band-alpha 1.0 --windows-per-stratum 15000 \
-        --frame-policies as-drawn --constant-scan full --out prep/embodiments.json
+        --frame-policies as-drawn --constant-scan full --out metadata/C/embodiments.json
 """
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import logging
 import math
@@ -1289,8 +1288,8 @@ def body_document(body: dict[str, Any]) -> dict[str, Any]:
 
 
 def entry_document(key: str, measured: dict[str, Any], spec: dict[str, Any],
-                   manifest_name: str, manifest_sha: str) -> dict[str, Any]:
-    """One key's embodiments.json v2 entry, before its digest."""
+                   manifest_name: str) -> dict[str, Any]:
+    """One key's embodiments.json v2 entry."""
     absent = measured["absent"]
     state = measured["state"]
     joints = key_table.joints_of(key, spec)
@@ -1318,8 +1317,7 @@ def entry_document(key: str, measured: dict[str, Any], spec: dict[str, Any],
         "body": body_document(measured["body"]),
         "ee_frame_fix": spec.get("ee_frame_fix"),
         "clause": spec["clause"],
-        "reference": {"manifest": manifest_name, "manifest_sha256": manifest_sha,
-                      **measured["reference"]},
+        "reference": {"manifest": manifest_name, **measured["reference"]},
         "stage": spec.get("stage"),
     }
 
@@ -1364,8 +1362,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--check-fit", action="store_true",
                         help="hold every key to R14 under each frame policy")
     parser.add_argument("--cache-index",
-                        help="the cache index the arrow caches were written under; hashed into "
-                             "the provenance so prepare_data can tell a stale normaliser")
+                        help="the cache index the arrow caches were written under; recorded "
+                             "among the provenance inputs")
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--seed", default="stats")
     parser.add_argument("--n-slots", type=int, default=2)
@@ -1596,12 +1594,12 @@ def directory_record_masks(directory: Directory, scan: Scan, entries: list[Any],
 def datasets_records(directories: list[Directory], scans: dict[str, Scan],
                      entries: dict[str, Any] | None = None,
                      gated: dict[str, dict[int, list[int]]] | None = None) -> dict[str, Any]:
-    """Every manifest directory's record: the six client inputs, digested, and its masks.
+    """Every manifest directory's record: the six client inputs and its masks.
 
     entries are the built Entry objects per key; without them (a file being
     assembled before its entries exist) the masks are left out.
     """
-    from neo_vla.data.embodiment import record_digest, record_from_manifest
+    from neo_vla.data.embodiment import record_from_manifest
     records = {}
     for directory in directories:
         entry = directory.stated
@@ -1614,7 +1612,6 @@ def datasets_records(directories: list[Directory], scans: dict[str, Scan],
             "constant": scan.constant.tolist(),
             "drot": drot_of(entry),
             "history_blocked": len((entry.get("history") or {}).get("blocked", [])),
-            "record_digest": record_digest(inputs),
         }
         if entries is not None:
             keys = [entries[key] for key in sorted(set(directory.keys))]
@@ -1625,14 +1622,9 @@ def datasets_records(directories: list[Directory], scans: dict[str, Scan],
 
 def assemble(args: argparse.Namespace, measured: dict[str, Any], scans: dict[str, Scan],
              directories: list[Directory], keys_table: dict[str, Any], manifest_rel: str,
-             manifest_sha: str, provenance: dict[str, Any]) -> Any:
+             provenance: dict[str, Any]) -> Any:
     """The embodiments.json document through the one implementation, validated on the way."""
-    from neo_vla.data.embodiment import (
-        INHERITED_GROUPS_ALL,
-        Embodiments,
-        _read_entry,
-        entry_digest,
-    )
+    from neo_vla.data.embodiment import INHERITED_GROUPS_ALL, Embodiments, _read_entry
     header = header_of(args.band_alpha)
     lineage = None
     if args.source_file:
@@ -1647,7 +1639,7 @@ def assemble(args: argparse.Namespace, measured: dict[str, Any], scans: dict[str
             raise refuse(f"key {key} is not in config/embodiments.yaml",
                          f"one of {sorted(keys_table)}", "add the key and its clause")
         check_effector(key, blocks, keys_table[key])
-        entries[key] = entry_document(key, blocks, keys_table[key], manifest_rel, manifest_sha)
+        entries[key] = entry_document(key, blocks, keys_table[key], manifest_rel)
     inherited: dict[str, Any] = {}
     for spec in args.inherit_action:
         key, _, source = spec.partition("=")
@@ -1706,9 +1698,7 @@ def assemble(args: argparse.Namespace, measured: dict[str, Any], scans: dict[str
         entries[key]["action"] = {**action, "gripper_valid": gripper_valid,
                                   "mask": list(stated["action"]["mask"]), "from": source,
                                   "from_groups": list(groups)}
-        inherited[key] = {"from": source, "groups": list(groups), "columns": list(columns),
-                          "source_digest": stated.get("digest"),
-                          "lineage_sha256": stage.sha256_of(Path(args.source_file))}
+        inherited[key] = {"from": source, "groups": list(groups), "columns": list(columns)}
         logger.info("%s copies %s's %s columns %s from %s; the other columns are its own",
                     key, source, list(groups), list(columns), args.source_file)
     for spec in args.reuse:
@@ -1718,7 +1708,6 @@ def assemble(args: argparse.Namespace, measured: dict[str, Any], scans: dict[str
             raise refuse(f"--reuse {spec} states normaliser {reused.header}", f"{header}",
                          "reuse only within one lineage")
         entries[key] = dict(reused.document()["embodiments"][key])
-        entries[key].pop("digest", None)
     clauses: dict[str, str] = {}
     for key, entry in entries.items():
         if entry["clause"] in clauses:
@@ -1727,7 +1716,6 @@ def assemble(args: argparse.Namespace, measured: dict[str, Any], scans: dict[str
                 f"clause {entry['clause']!r}\nExpected one clause per key: the clause names "
                 f"the normaliser.\nGive each key its own clause in config/embodiments.yaml.")
         clauses[entry["clause"]] = key
-        entry["digest"] = entry_digest(entry, header)
     check_lineage(entries, keys_table, None if lineage is None else lineage.document(),
                   dict(spec.partition("=")[::2] for spec in args.inherit_action),
                   {spec.partition("#")[2] for spec in args.reuse})
@@ -1744,16 +1732,19 @@ def assemble(args: argparse.Namespace, measured: dict[str, Any], scans: dict[str
 def check_lineage(entries: dict[str, Any], keys_table: dict[str, Any],
                   lineage: dict[str, Any] | None, inherited: dict[str, str],
                   reused: set[str]) -> None:
-    """V6 4.7 at build time, on the finished entries (digests included).
+    """V6 4.7 at build time, on the finished entries.
 
     Every key this build measures states a stage; a finetune key is built
     against a lineage (--from), whose header assemble() has already held this
     build to; a key whose table entry names action_from copies exactly that
     key's action block (the groups action_from_groups names, every group when it
     names none; assemble() copies them) and no other key copies one. Given a
-    lineage, a key it holds keeps that entry digest for digest (4.7a; R8 at the runner), and no
-    key shares a clause with another key of the lineage (R9 across files).
+    lineage, a key it holds keeps that entry, numbers, declarations and clause
+    alike (entry_identity; 4.7a, R8 at the runner), and no key shares a clause
+    with another key of the lineage (R9 across files).
     """
+    from neo_vla.data.embodiment import entry_identity, identity_differs
+
     for key in sorted(set(entries) - reused):
         spec = keys_table[key]
         stage_name = spec.get("stage")
@@ -1770,7 +1761,7 @@ def check_lineage(entries: dict[str, Any], keys_table: dict[str, Any],
             raise refuse(f"key {key} copies its action block from {source} (config/"
                          f"embodiments.yaml action_from) and this build "
                          + ("measures it" if given is None else f"copies it from {given}"),
-                         "the action block of the key the table names, digest for digest "
+                         "the action block of the key the table names, value for value "
                          "(V6 4.7, D6(i))",
                          f"pass --inherit-action {key}={source} with --from <init step>/"
                          f"embodiments.json")
@@ -1782,13 +1773,17 @@ def check_lineage(entries: dict[str, Any], keys_table: dict[str, Any],
     if lineage is None:
         return
     held = lineage["embodiments"]
+    header = lineage["normaliser"]
     for key, entry in sorted(entries.items()):
-        if key in held and held[key]["digest"] != entry["digest"]:
-            raise ValueError(
-                f"{refusal_prefix(8)} key {key} is in the lineage file at {held[key]['digest']} "
-                f"and this build writes {entry['digest']}\nExpected a key the lineage holds to "
-                f"keep its entry, digest for digest (V6 4.7a).\nPass --reuse <the --from "
-                f"file>#{key} instead of measuring it again.")
+        if key in held:
+            found, wanted = entry_identity(held[key], header), entry_identity(entry, header)
+            if found != wanted:
+                raise ValueError(
+                    f"{refusal_prefix(8)} key {key} is in the lineage file and this build "
+                    f"writes an entry differing in {identity_differs(found, wanted)}\n"
+                    f"Expected a key the lineage holds to keep its entry, value for value "
+                    f"(V6 4.7a).\nPass --reuse <the --from file>#{key} instead of measuring "
+                    f"it again.")
         for other, stated in sorted(held.items()):
             if other != key and stated["clause"] == entry["clause"]:
                 raise ValueError(
@@ -2015,7 +2010,6 @@ def main(argv: list[str] | None = None) -> int:
                  else stage.under_root(root, args.embodiments))
     keys_table = read_keys(table)
     skip = {spec.partition("#")[2] for spec in args.reuse}
-    manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
     with tempfile.TemporaryDirectory(prefix="build_stats_") as scratch:
         factory = real_factory(root, manifest_path, manifest, args, Path(scratch))
         measured, scans, directories = measure_all(root, manifest, factory, args, skip,
@@ -2026,15 +2020,14 @@ def main(argv: list[str] | None = None) -> int:
         header = stage.header("build_stats", root=root, inputs=inputs, tree=REPO)
         provenance = {**header,
                       "argv": list(sys.argv[1:] if argv is None else argv),
-                      "manifest": stage.relative(root, manifest_path),
-                      "manifest_sha256": manifest_sha, "seed": args.seed,
+                      "manifest": stage.relative(root, manifest_path), "seed": args.seed,
                       "windows_per_stratum": args.windows_per_stratum,
                       "frame_policies": args.frame_policies,
                       "band_rates": {key: blocks["band"] for key, blocks in sorted(
                           measured.items())},
                       "gates": gate_stamps(measured)}
         built = assemble(args, measured, scans, directories, keys_table,
-                         stage.relative(root, manifest_path), manifest_sha, provenance)
+                         stage.relative(root, manifest_path), provenance)
         if args.check_fit:
             fits = check_fit(built, root, manifest, factory, args)
             document = built.document()
@@ -2047,15 +2040,15 @@ def main(argv: list[str] | None = None) -> int:
     temporary = out.with_suffix(out.suffix + ".tmp")
     temporary.write_bytes(payload)
     temporary.replace(out)
-    if stage.sha256_of(out) != hashlib.sha256(payload).hexdigest():
+    if out.read_bytes() != payload:
         raise OSError(
             f"{out} does not hold the {len(payload)} bytes written to it\n"
             f"expected the file to read back as what the stage produced\n"
             f"free space under the root, then run this stage again")
     from neo_vla.data.embodiment import Embodiments
     Embodiments.load(out)
-    logger.info("%d keys, %d directories; wrote %s (sha256 %s)", len(built.entries),
-                len(built.datasets), out, hashlib.sha256(payload).hexdigest()[:16])
+    logger.info("%d keys, %d directories; wrote %s (%d bytes)", len(built.entries),
+                len(built.datasets), out, len(payload))
     return 0
 
 

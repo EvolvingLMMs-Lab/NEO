@@ -1,7 +1,7 @@
 """Stage 9: the one file the dataset opens to learn what exists (manifest schema 3).
 
 Folds the earlier stages into one document and holds no numbers of its own:
-every field traces to the stage that produced it through the provenance hashes.
+every field traces to the stage that produced it through the provenance header.
 Per entry: the embodiment key or per-episode key arrays, control_hz, the
 gripper record, the rotation convention and its source, the RH20T blocked
 history; schema 3 adds per arm the joints and hand blocks, the body block, the
@@ -12,10 +12,12 @@ missing stamp (R22), never read as "not recorded". Two keys
 sharing a clause refuse (R9).
 
 Usage:
-    python tools/build_manifest.py --root /corpus --kept prep/kept.jsonl --scale prep/scale.json \
-        --weights prep/weights.json --inventory prep/inventory.jsonl --layouts L --corpus C \
-        --frequency prep/frequency.json --embodiment prep/embodiment.json \
-        --gripper prep/gripper.json --out manifests/C.json
+    python tools/build_manifest.py --root /corpus --kept metadata/C/kept.jsonl \
+        --scale metadata/C/scale.json --weights metadata/C/weights.json \
+        --inventory metadata/C/inventory.jsonl --layouts L --corpus C \
+        --frequency metadata/C/frequency.json --embodiment metadata/C/embodiment.json \
+        --gripper metadata/C/gripper.json --prompt-template config/prompt_template/policy.yaml \
+        --prompt-cache processed/C/prompt ... --out manifests/C.json
 """
 from __future__ import annotations
 
@@ -40,7 +42,7 @@ from corpus_stamps import (
     sidecar_rows,
 )
 
-from neo_vla.constants import MANIFEST_SCHEMA_VERSION, refusal_prefix
+from neo_vla.constants import MANIFEST_SCHEMA_VERSION, PROCESSED_DIR, refusal_prefix
 from neo_vla.data.state import PART_FIELDS
 from neo_vla.data import rays, registry
 from neo_vla.data.conditioning import parse_frame_ref
@@ -72,7 +74,7 @@ V6_INPUTS = ("frequency", "embodiment", "gripper")
 
 # Extrinsics sources whose rotations come from a file rather than from the
 # episode metadata. The entry names that file so the cache stage rereads what
-# this stage recorded, and this stage hashes it for the same reason.
+# this stage recorded, and this stage records it as an input for the same reason.
 FILE_SOURCES = ("sidecar", "stage")
 
 
@@ -450,7 +452,7 @@ def gripper_record(gripper: dict[str, Any]) -> dict[str, Any]:
     """measure_gripper_polarity's record as the manifest states it.
 
     A masked gripper has no raw stroke; the record still states two numbers,
-    because every client recomputes its record digest from the manifest, so it
+    because every client recomputes its record inputs from the manifest, so it
     states the identity pair (raw_open 0, raw_closed 1) that the method
     "masked" says is never used: the gripper dim is invalid for the directory.
     """
@@ -616,12 +618,11 @@ def sidecar_block(root: Path, folder: str, name: str, kept: list[tuple[int, int]
                   columns: list[str]) -> dict[str, Any]:
     """The manifest's sidecar block for a directory whose v7 columns are a stage-1 sidecar.
 
-    The sidecar is prep_<corpus>/sidecars/<entry name>.parquet (never beside
+    The sidecar is metadata/<corpus>/sidecars/<entry name>.parquet (never beside
     the source). Its stamp must be this format and writer version, the v7
     ingest layout and record stamps, this entry; it must have written every
     column the layouts read, and hold every kept episode with its rows (R16).
-    The block pins its source and boundary digests, so a cache merged from a
-    sidecar rebuilt since is refused as stale.
+    The block names the sidecar's path.
     """
     path = stage.under_root(root, Path(folder) / f"{name}.parquet")
     relative = stage.relative(root, path)
@@ -630,7 +631,7 @@ def sidecar_block(root: Path, folder: str, name: str, kept: list[tuple[int, int]
                                  "there", "the stage-1 sidecar of every sidecar directory",
                            "build it with the sidecar writer, then rebuild the manifest")
     stamp = read_sidecar_stamp(path)
-    pins = check_sidecar_stamp(stamp, name, columns, relative)
+    check_sidecar_stamp(stamp, name, columns, relative)
     rows = sidecar_rows(stamp, relative)
     for episode, length in kept:
         if rows.get(int(episode)) != int(length):
@@ -641,7 +642,7 @@ def sidecar_block(root: Path, folder: str, name: str, kept: list[tuple[int, int]
                 f"{'no such episode' if held is None else f'{held} rows of it'}\n"
                 f"expected every kept episode with the directory's rows\n"
                 f"rebuild the sidecar against the directory as it is now")
-    return {"path": relative, **pins}
+    return {"path": relative}
 
 
 def extrinsics_of(
@@ -701,7 +702,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="the key table (neo_vla_embodiment_keys_v2): clauses and the "
                              "joints, hand and body each key declares")
     parser.add_argument("--sidecars",
-                        help="where the stage-1 sidecars are, prep_<corpus>/sidecars under the "
+                        help="where the stage-1 sidecars are, metadata/<corpus>/sidecars under the "
                              "root; needed when a layout states stored sidecar")
     parser.add_argument("--history-blocked",
                         help="tools/lists/rh20t_history_blocked_*.json, for the pretrain corpus")
@@ -720,7 +721,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--canvas-token", type=int, default=32)
     parser.add_argument("--canvas-cell", type=int, nargs=2, default=[256, 352])
     parser.add_argument("--n-views", type=int, default=3)
-    parser.add_argument("--cache-dir", default="cache")
+    parser.add_argument("--cache-dir", help=f"the caches' folder; default {PROCESSED_DIR}/<corpus>")
     parser.add_argument("--prompt-template", required=True)
     parser.add_argument("--prompt-cache", required=True)
     parser.add_argument("--tokenizer-id", required=True)
@@ -730,6 +731,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="how the calibration reaches the model this corpus is for; "
                              "tokens, the one mode")
     args = parser.parse_args(argv)
+    if args.cache_dir is None:
+        args.cache_dir = f"{PROCESSED_DIR}/{args.corpus}"
 
     logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
     root = stage.resolve_root(args.root)
@@ -745,7 +748,7 @@ def main(argv: list[str] | None = None) -> int:
         "prompt_template": stage.under_root(root, args.prompt_template),
     }
     # Keyed by the path the entries carry, so an entry's path_source and the
-    # header's hash name one string and a rebuilt file is visible in both.
+    # header's inputs name one string.
     intrinsics = {}
     for name in args.intrinsics:
         resolved = stage.under_root(root, name)
@@ -758,17 +761,16 @@ def main(argv: list[str] | None = None) -> int:
     scale = stage.read_json(paths["scale"])["datasets"]
     v6 = {name: stage.read_json(paths[name])["datasets"] for name in V6_INPUTS}
     # Repository configs are not under the root, so the header records them by
-    # name and hash in its settings rather than among the root-relative inputs.
+    # name in its settings rather than among the root-relative inputs.
     configs: dict[str, Any] = {}
     table_path = repo_or_root(root, args.embodiments)
     keys_table = key_table.load(table_path)["keys"]
-    configs["embodiments"] = {"path": args.embodiments, "sha256": stage.sha256_of(table_path)}
+    configs["embodiments"] = {"path": args.embodiments}
     listing = None
     if args.history_blocked:
         listing_path = repo_or_root(root, args.history_blocked)
         listing = json.loads(listing_path.read_text(encoding="utf-8"))
-        configs["history_blocked"] = {"path": args.history_blocked,
-                                      "sha256": stage.sha256_of(listing_path)}
+        configs["history_blocked"] = {"path": args.history_blocked}
     offsets = {}
     if args.base_offsets:
         paths["base_offsets"] = stage.under_root(root, args.base_offsets)
@@ -850,7 +852,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.sidecars is None:
                 raise ValueError(
                     f"{layout.name} states its v7 columns are a sidecar and --sidecars is not "
-                    f"given\nexpected the sidecar folder, prep_<corpus>/sidecars under the "
+                    f"given\nexpected the sidecar folder, metadata/<corpus>/sidecars under the "
                     f"root\npass --sidecars")
             read = [name for field, name in columns.items()
                     if field not in ("state", "action") and name is not None]
@@ -925,8 +927,8 @@ def main(argv: list[str] | None = None) -> int:
                     listing["header"]["count"])
 
     # After the entries, because it is the layout's own extrinsics path that
-    # names them: a rebuilt pose file changes the arrays the cache stage writes
-    # from it, and without the hash here nothing would call the manifest stale.
+    # names them: the pose files the cache stage writes from are inputs of the
+    # manifest too.
     for entry in entries:
         for view in entry["views"]:
             named = view["extrinsics"].get("path_source")
@@ -937,7 +939,7 @@ def main(argv: list[str] | None = None) -> int:
     # a default: it stamps the cache the loader then refuses by name. The mode and
     # the artifact are held together here too, because they say the same thing
     # -- what stands between <cam_k> and that view's picture -- and only the
-    # artifact is hashed into the stamp.
+    # artifact's name and version go into the stamp.
     template = load_template(paths["prompt_template"])
     check_mode_agrees(template, args.intrinsics_mode)
 

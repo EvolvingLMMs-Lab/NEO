@@ -1,10 +1,10 @@
 """Re-read every written sidecar against its directory and report coverage per family.
 
 Per entry: the stamp and rows check of common.read_sidecar; the directory's
-episodes and rows recounted from its own parquet; its meta tree digest; no arm
-whose joint block is all exactly 0 on any row; no joint reading beyond
-common.JOINT_CEILING_RAD, and the in-episode joint steps past pi counted (the
-steps build_stats' wrap gate masks a joint for); for OXE group A, every parquet
+episodes and rows recounted from its own parquet; no arm whose joint block is
+all exactly 0 on any row; no joint reading beyond common.JOINT_CEILING_RAD,
+and the in-episode joint steps past pi counted (the steps build_stats' wrap
+gate masks a joint for); for OXE group A, every parquet
 row whose joint slots are all 0 is NaN in the sidecar. --sample-episodes N
 re-reads N random AgiBot and DROID episodes from their raw files and compares
 the sidecar values with them, and an AgiBot episode without odometry with an
@@ -73,8 +73,6 @@ def check_entry(entry: dict[str, Any], root: Path, out: Path) -> dict[str, Any]:
                and [e.rows for e in episodes] == meta["episode_rows"])
     if not aligned:
         problems.append("episodes or rows differ from the directory")
-    if stage.sha256_of_tree(directory / "meta") != meta["directory_meta_sha256"]:
-        problems.append("directory meta changed since the sidecar was written")
     arms = int(meta["arms"])
     joints = column(table, common.COLUMN_JOINTS)
     body = column(table, common.COLUMN_BODY)

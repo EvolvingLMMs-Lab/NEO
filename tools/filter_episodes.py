@@ -10,8 +10,8 @@ list. That position, not the episode index, is what every later stage keys on,
 because a filtered directory renumbers everything after its first drop.
 
 Usage:
-    python tools/filter_episodes.py --root /corpus --validation prep/validation.jsonl \
-        --drop episode_unreadable --drop frames_missing --out prep/kept.jsonl
+    python tools/filter_episodes.py --root /corpus --validation metadata/C/validation.jsonl \
+        --drop episode_unreadable --drop frames_missing --out metadata/C/kept.jsonl
 """
 from __future__ import annotations
 

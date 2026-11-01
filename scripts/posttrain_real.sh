@@ -43,7 +43,7 @@ NEO_ENV=(HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}" TRANSFORMERS_OFFLINE="${TRANSFORM
 
 train=(--root "$NEO_VLA_DATA_ROOT" --corpus "$REAL_CORPUS"
        --run-name "${RUN_NAME:-posttrain_real}" --backbone "$NEO_VLA_BACKBONE"
-       --arch skip28 --mode cotrain --data real_cotrain_cocogptshare --schedule finetune
+       --arch skip28 --mode cotrain --data robot_adaptation --schedule finetune
        --output-root "$NEO_VLA_OUTPUT_ROOT" --nproc "$GPUS_PER_NODE" --workers "${WORKERS:-8}")
 if [ "$NNODES" != 1 ]; then
     train+=(--nnodes "$NNODES" --node-rank "$NODE_RANK" --master-addr "$MASTER_ADDR"

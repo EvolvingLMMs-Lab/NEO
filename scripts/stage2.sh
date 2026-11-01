@@ -22,9 +22,9 @@ NEO_ENV=(HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}" TRANSFORMERS_OFFLINE="${TRANSFORM
          NEO_VLA_COCOGPTSHARE_IMAGES="$NEO_VLA_COCOGPTSHARE_IMAGES"
          NUMPY_MADVISE_HUGEPAGE="${NUMPY_MADVISE_HUGEPAGE:-0}")
 
-train=(--root "$NEO_VLA_DATA_ROOT" --corpus "${STAGE1_CORPUS:-gd7_tokens_nobw}"
+train=(--root "$NEO_VLA_DATA_ROOT" --corpus "${PRETRAIN_CORPUS:-action_pretrain}"
        --run-name "${RUN_NAME:-stage2}" --backbone "$NEO_VLA_BACKBONE"
-       --arch skip28 --mode cotrain --data gd7_cotrain_cocogptshare --schedule pretrain
+       --arch skip28 --mode cotrain --data action_pretrain_cotrain --schedule pretrain
        --output-root "$NEO_VLA_OUTPUT_ROOT" --nproc "$GPUS_PER_NODE"
        --workers "${WORKERS:-12}" --prefetch "${PREFETCH:-16}")
 if [ "$NNODES" != 1 ]; then

@@ -7,12 +7,12 @@ episode in the filter stage is the cleaner answer, but every kept position
 after it renumbers, and the caches, the episode starts and the row offsets are
 all keyed on that numbering. A zero weight moves no position.
 
-The index hashes every array it wrote, so an edited one is not trusted.
+The index lists every array it wrote, so a missing one makes the stage run again.
 
 Usage:
     python tools/build_trajectory_weights.py --root /corpus \
-        --validation prep/validation.jsonl --kept prep/kept.jsonl \
-        --out-dir prep/trajectory --out prep/trajectory.json
+        --validation metadata/C/validation.jsonl --kept metadata/C/kept.jsonl \
+        --out-dir metadata/C/trajectory --out metadata/C/trajectory.json
 """
 from __future__ import annotations
 
@@ -160,7 +160,7 @@ def main(argv: list[str] | None = None) -> int:
     stage.refuse_write_into_input(out, [root / tally.directory for tally in tallies.values()])
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    artifacts: dict[str, str] = {}
+    artifacts: list[str] = []
     directories: dict[str, Any] = {}
     zeroed_total = 0
     for name in sorted(tallies):
@@ -168,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
         path = out_dir / f"{name}{args.suffix}"
         write_array(path, tally.weights(name))
         key = stage.relative(root, path)
-        artifacts[key] = stage.sha256_of(path)
+        artifacts.append(key)
         zeroed_total += len(tally.zeroed)
         directories[name] = {
             "directory": tally.directory,

@@ -98,9 +98,8 @@ def intra_op_threads(count: int) -> Iterator[None]:
     """torch's intra-op thread count set to count in the body, the old count restored after.
 
     The count is the process's while the body runs: another thread that starts
-    its first OpenMP region then sizes its pool from it (the only such thread
-    seen is the speed harness's digest thread [inferred]). The training loop
-    runs no compiled call inside the body.
+    its first OpenMP region then sizes its pool from it. The training loop runs
+    no compiled call inside the body.
     """
     before = torch.get_num_threads()
     torch.set_num_threads(int(count))

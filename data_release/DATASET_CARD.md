@@ -11,17 +11,16 @@ tags:
 - processed
 ---
 
-# NEO-VLA stage-1 robot corpus `gd7_tokens_nobw` (processed)
+# NEO-VLA action-pretraining corpus `action_pretrain` (processed)
 
 Processed robot demonstrations used to pretrain NEO-VLA, an academic
 vision-language-action research model. The corpus combines nine public robot
 datasets, converted to one layout, quality-filtered and cached for training.
 
-**Status: prepared for private release.** These files are processed
-derivatives of third-party datasets. Each source keeps its own licence and
-terms, and every source is **pending licence review**
-(`sources_inventory.json`). No licence is granted here. A source is shared
-only after its review is complete.
+**Status: private staging.** These files are processed derivatives of
+third-party datasets. Each source keeps its own licence and terms, and every
+source is **pending licence review** (`sources_inventory.json`,
+`UPSTREAM_TERMS.md`). No licence is granted here.
 
 ## Size
 
@@ -43,26 +42,25 @@ Per-source counts (the manifest's 15 source keys) are in `corpus_summary.json`.
 The counts are the manifest's own. They were read from its metadata without
 re-scanning the payload.
 
-| record | identity |
+| record | description |
 |---|---|
-| manifest `manifests/gd7_tokens_nobw.json` | sha256 `7367f9c862ca5512378ae093e66ed785c9650a15b41c7f49b94a2d532ec90320` |
-| normaliser `prep_gd7_tokens_nobw/embodiments.json` | sha256 `612852446612cd2180fabd840a7f61665bd3114306495bf56b1481c9ab547b4a` |
-| code the corpus was built with | commit `9beb654ef40dfa3907a4b011216b472034737950` |
+| manifest `manifests/action_pretrain.json` | corpus `action_pretrain`, manifest schema 3, 2,704 directories |
+| normaliser `metadata/action_pretrain/embodiments.json` | `neo_vla_embodiments_v2`, 37 embodiment keys, one datasets record per manifest directory |
 
 ## Contents
 
 | item | path | what it is |
 |---|---|---|
-| manifest | `manifests/gd7_tokens_nobw.json` | every directory, its cameras, arms, action layout, embodiment key, control rate and weight (schema 3) |
-| normaliser | `prep_gd7_tokens_nobw/embodiments.json` | per-embodiment q01/q99 bounds and the masks training uses |
-| stage records | `prep_gd7_tokens_nobw/*.jsonl`, `*.json` | inventory, per-episode validation defects, kept and dropped episodes with reasons, calibration records and their validation, frequency, gripper and embodiment declarations, weights; each starts with a provenance header (tool, version, commit, input hashes) |
-| joint sidecars | `prep_gd7_tokens_nobw/sidecars/` | joints, hand and body for directories whose converted parquet lacks them |
-| cache | `cache_gd7_tokens_nobw/` | numeric arrow files, frame index, per-episode camera geometry, rendered prompts |
-| converted directories | one per dataset | per-episode parquet and video, `meta/info.json`, `meta/episodes.jsonl` |
-| layout and keys | `config/layouts/gd7.json`, `config/embodiments.yaml` | per-dataset layout with its evidence; embodiment key table |
+| manifest | `manifests/action_pretrain.json` | every directory, its cameras, arms, action layout, embodiment key, control rate and weight (schema 3) |
+| normaliser | `metadata/action_pretrain/embodiments.json` | per-embodiment q01/q99 bounds and the masks training uses |
+| stage records | `metadata/action_pretrain/*.jsonl`, `*.json` | inventory, per-episode validation defects, kept and dropped episodes with reasons, calibration records and their validation, frequency, gripper and embodiment declarations, weights; each starts with a provenance header (tool, version, commit, inputs) |
+| joint sidecars | `metadata/action_pretrain/sidecars/` | joints, hand and body for directories whose converted parquet lacks them |
+| processed caches | `processed/action_pretrain/` | numeric arrow files, frame index, per-episode camera geometry, rendered prompts |
+| converted directories | one per source dataset (`agibot/`, `oxe/`, ...) | per-episode parquet and video, `meta/info.json`, `meta/episodes.jsonl` |
+| layout and keys | `config/layouts/action_pretrain.json`, `config/embodiments.yaml` (code repository) | per-dataset layout with its evidence; embodiment key table |
 
-Which of these are shared is set per source by the release plan
-(`stage_upload.py`). Vendor raw archives are never redistributed.
+Which sources' files are shared depends on their licence review. Vendor raw
+archives are never redistributed.
 
 ## Release validation
 
@@ -126,7 +124,7 @@ Anyone training with other code must apply the loader-side masks from
 - Control rates are each source's nominal rate. Where stored timestamps
   disagree by more than 10%, the rate is stated as unknown.
 - The counts above describe this build. A rebuild with different inputs or
-  tools records different provenance hashes.
+  tools can give different counts.
 
 ## Licences and citation
 
