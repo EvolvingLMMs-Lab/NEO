@@ -17,8 +17,8 @@
 
 <p align="center">
   <a href="https://weichenfan.github.io/NEO-VLA-Page/"><b>Project Page</b></a> ·
-  <b>HF Model — coming soon</b> ·
-  <a href="https://huggingface.co/datasets/weepiess2383/NEO-VLA-Action-Pretrain"><b>HF Data</b></a>
+  <a href="https://huggingface.co/datasets/weepiess2383/NEO-VLA-Action-Pretrain"><b>🤗 Dataset</b></a> ·
+  <a href="https://huggingface.co/weepiess2383/NEO-VLA"><b>🤗 Model</b></a>
 </p>
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-7762b6.svg" alt="License: Apache 2.0"></a>
