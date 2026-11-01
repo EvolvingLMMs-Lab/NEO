@@ -82,13 +82,14 @@ node-local; stages 1 and 2 compile layers with `torch.compile`.
 
 Prompt caches are rendered from `config/prompt_template/policy.yaml` and record
 its name together with the tokenizer, text budget, prefix layout, view count and
-intrinsics mode. Build or re-render them with this file before training, and use
-the same template throughout all three stages.
+intrinsics mode. The processed release's prompt caches were rendered from this
+file; a corpus you prepare yourself must use the same template, unchanged,
+throughout all three stages.
 
 `NEO_VLA_TOKENIZER_ID` is the portable identifier stored with the prompt cache
-(default `neo-2b`), separate from the local `NEO_VLA_BACKBONE` path. When
-preparing caches with a different tokenizer, use the same identifier for
-`tools/prepare_data.py --tokenizer-id` and training.
+(default `neo-2b`), separate from the local `NEO_VLA_BACKBONE` path. A corpus
+whose caches were rendered with a different tokenizer must be trained with the
+identifier stamped in its caches.
 
 ## Stage 1: pretrain
 
@@ -106,34 +107,33 @@ warmup steps, cosine to 2e-5, gradient clip 1.0; EMA 0.99; seed 0; layers
 compiled (`trainer.compile_layers`), prefix trimmed to 64-column buckets,
 no gradient checkpointing; a checkpoint every 1,000 steps, the last 2 kept.
 
-**Input.** The prepared robot corpus `action_pretrain` (2,704 directories,
+**Input.** The processed robot corpus `action_pretrain` (2,704 directories,
 2,231,583 episodes, 928,401,030 rows from AgiBot, OXE, DROID, RH20T,
 InternData-A1, RoboCOIN, Galaxea, RoboMIND and BimanualYAM), with its
-manifest, caches and normaliser under `NEO_VLA_DATA_ROOT`. The corpus is not
-distributed with this code, and the per-source converters that produced it
-are not included; `config/layouts/action_pretrain.json` documents its layout
-and `config/data/action_pretrain.yaml` its mixture (InternData-A1 fixed at 15%,
-the other families by row count^0.43) and row sampling.
+manifest, caches and normaliser under `NEO_VLA_DATA_ROOT`. Download it from
+[weepiess2383/NEO-VLA-Action-Pretrain](https://huggingface.co/datasets/weepiess2383/NEO-VLA-Action-Pretrain)
+(incremental upload, currently incomplete) and use its release metadata
+(manifest and `embodiments.json`) as published. The per-source converters are
+not included; `config/layouts/action_pretrain.json` documents the column
+layout and `config/data/action_pretrain.yaml` the mixture (InternData-A1 fixed
+at 15%, the other families by row count^0.43) and row sampling.
 
-Runs started with this release draw their windows and post-train frames in a
-deterministic order that differs from earlier builds of this code: the
-per-directory permutation keys, the post-train frame choice and the
-preprocessing tools' sampling seeds are derived from names by integer mixing.
-Each directory's share, every window distribution and the run's determinism
-are unchanged.
+Windows and post-train frames are drawn in a deterministic order: the
+per-directory permutation keys and the post-train frame choice are derived
+from names by integer mixing.
 
-**Preprocessing.** [preprocessing.md](preprocessing.md) gives the
-commands that turn converted directories into the manifest, cache and
-normaliser. It covers five quality stages:
+**Filtering.** [preprocessing.md](preprocessing.md) describes the five
+quality filters and their scripts:
 
-1. implausible joint readings are stored as NaN (`tools/sidecars/`);
-2. dead and wrapping joint and hand channels are masked (`tools/build_stats.py`);
-3. an out-of-band action target masks only its own group at that step;
+1. implausible joint readings are stored as NaN (`tools/filter_joint_readings.py`);
+2. dead and wrapping joint and hand channels are masked (`tools/filter_channels.py`);
+3. an out-of-band action target masks only its own group at that step
+   (`tools/filter_action_outliers.py`; applied by the loader);
 4. corrupt episodes are dropped with a named reason
    (`tools/validate_episodes.py`, `tools/filter_episodes.py`);
-5. camera calibrations are checked, and a pose that fails the projection QC
-   becomes unknown while its episode is kept (`tools/qc_extrinsics.py`,
-   `tools/build_cache.py --pose-qc`).
+5. camera calibrations are checked, and a pose that fails the projection check
+   becomes unknown while its episode is kept (`tools/validate_intrinsics.py`,
+   `tools/qc_extrinsics.py`, `tools/filter_camera_poses.py`).
 
 A summary of the processed corpus is in
 [dataset card](../data_release/DATASET_CARD.md).
@@ -182,34 +182,23 @@ checkpoint is saved every 1,000 steps and the latest is retained. Set
 | `REAL_FRAME_SET` | Space-separated `KEY=FRAMES` entries, e.g. `my_key=[[camera:1]]`; for random mode, `my_key=[[robot],[camera:1]]` |
 | `REAL_FRAME_DRAW` | Draw a random frame per `episode` (default) or `sample` |
 
-**Preparing the real-robot corpus.** The loader reads any schema-3 manifest
-built by the preparation pipeline; it is not tied to one robot.
+**Real-robot corpus.** The loader reads any compatible corpus; it is not tied
+to one robot. This repository does not include converters or manifest, cache
+and normalizer builders, so you prepare the corpus with your own tooling in
+the layout of the processed release:
 
-1. Convert raw recordings into source directories (per-episode parquet and
-   video files with `meta/info.json` and `meta/episodes.jsonl`) with a
-   converter for your robot; none is included here.
-2. Describe the directories in a layout file (the schema `tools/layouts.py`
-   reads; `config/layouts/action_pretrain.json` is a full example) and give each new
-   embodiment key a block in `config/embodiments.yaml` with `stage: finetune`
-   (optionally `action_from: <pretrain key>`).
-3. Build the manifest, cache and normaliser:
+- `manifests/$REAL_CORPUS.json`: a schema-3 manifest (the released
+  `manifests/action_pretrain.json` is a complete example);
+- `metadata/$REAL_CORPUS/embodiments.json`: a `neo_vla_embodiments_v2`
+  normalizer with an entry for each embodiment key, read through
+  `neo_vla/data/embodiment.py`; give each new key a block in
+  `config/embodiments.yaml` with `stage: finetune`;
+- `processed/$REAL_CORPUS/`: Arrow, frame, camera and prompt caches, the
+  prompts rendered from `config/prompt_template/policy.yaml` and stamped with
+  the tokenizer identifier the run uses (or pass
+  `-- data.train.tokenizer_id=<stamped id>`).
 
-   ```bash
-   python tools/prepare_data.py --root $NEO_VLA_DATA_ROOT --corpus $REAL_CORPUS \
-       --layouts config/layouts/my_robot.json \
-       --dir <source dir> [--dir ...] --drop <rule> ... \
-       --tokenizer $NEO_VLA_BACKBONE --tokenizer-id $NEO_VLA_BACKBONE \
-       --stats-from $STAGE2_CKPT/embodiments.json --check-fit \
-       [--inherit-action my_key=franka_panda] \
-       [--stats-frame-policies camera:1]
-   ```
-
-   The prompt cache is stamped with `--tokenizer-id`, and the loader refuses
-   a run whose `NEO_VLA_BACKBONE` string differs from it (or pass
-   `-- data.train.tokenizer_id=<stamped id>`). `--stats-from` builds the
-   normaliser against the stage-2 checkpoint's own keys; `--check-fit` and the
-   run's start-up check hold every key to the normaliser's fit test. Use the
-   ten `--drop` rules listed in [preprocessing.md](preprocessing.md)
-   (stage 4). The layout file and `config/prompt_template/policy.yaml` are
-   read from under `--root`. The stage records and normaliser are written to
-   `metadata/$REAL_CORPUS/` and the caches to `processed/$REAL_CORPUS/`.
+At start-up the run checks every key against the normalizer's fit test. The
+filters in [preprocessing.md](preprocessing.md) can be applied to your
+episode directories before the corpus is assembled; use the ten drop rules of
+rule 4.

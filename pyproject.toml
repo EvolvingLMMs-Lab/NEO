@@ -25,19 +25,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Data preprocessing: the joint sidecars read AgiBot and DROID HDF5 (h5py); the
-# camera-pose QC uses OpenCV and, for DROID, SciPy rotations.
-prep = ["h5py", "scipy", "opencv-python-headless"]
+# Data filters: the camera-pose projection check uses OpenCV and, for DROID,
+# SciPy rotations.
+prep = ["scipy", "opencv-python-headless"]
 dev = ["pytest", "ruff", "h5py"]
 
 [tool.setuptools.packages.find]
 include = ["neo_vla*"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-# The suite imports the library, the data tools and its own helpers by name.
-pythonpath = [".", "tools", "tests"]
-markers = ["gpu: needs a GPU", "distributed: needs more than one process"]
 
 [tool.ruff]
 line-length = 100

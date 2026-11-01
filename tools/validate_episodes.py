@@ -1,73 +1,51 @@
-"""Stage 2: what is wrong with each episode. It drops nothing.
+"""Rule 4 (part 1): name what is wrong with each episode. It drops nothing.
 
-One record per inventory record, in the same order, holding a named defect list
-and a pass flag. Reporting is separate from filtering so that a defect which
-turns out to be common is a decision about the corpus rather than a silent loss
-of part of it.
-
-The defect names cover the classes that have actually cost this corpus a run:
-unreadable and truncated episodes, an action column that is a copy of the
-state, zero rows presented as valid, missing instruction text, a quaternion
-that is not a rotation, and an extrinsic that is not one either.
+One record per episode of the given directories, holding a named defect list
+and a pass flag; filter_episodes.py turns chosen defect names into drops.
+Episodes are read from each directory's meta/info.json, meta/episodes.jsonl,
+per-episode parquet and video files; the layout file states which columns hold
+the state and the action.
 
 Usage:
-    python tools/validate_episodes.py --root /corpus --inventory metadata/C/inventory.jsonl \
-        --layouts config/layouts/action_pretrain.json --out metadata/C/validation.jsonl
+    python tools/validate_episodes.py --root $NEO_VLA_DATA_ROOT --dirs-file dirs.txt \
+        --layouts config/layouts/action_pretrain.json --out filtered/validation.jsonl
 """
 from __future__ import annotations
 
 import argparse
 import json
-import logging
 import sys
 from collections import Counter
 from pathlib import Path
 from typing import Any
 
-import layouts as layout_table
+import filter_common as common
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
-import stage
 
-# The bound is imported rather than restated: layouts already pulls neo_vla in,
-# so the module is loaded by the time this line runs and it costs nothing. One
-# number, in one place, is what makes it auditable.
 from neo_vla.data.state import ROTATION_WIDTHS
 from neo_vla.model.tokenizers import RECORD_LIMIT
 
-logger = logging.getLogger("validate_episodes")
-
-REPO = Path(__file__).resolve().parent.parent
-
 
 def out_of_range(values: np.ndarray) -> np.ndarray:
-    """Elementwise: is this a number NO measurement could be?
-
-    Not merely non-finite. RH20T ships garbled telemetry as a finite number of
-    impossible size -- state = -9.648338e37 with the frames either side
-    continuous to a tenth of a centimetre -- and an isfinite count called the
-    file that carried it clean. It went on to make the loss nan at step 9,920,
-    through the backward pass only, with a healthy forward loss.
-    """
+    """Elementwise: non-finite, or a finite value beyond RECORD_LIMIT no measurement reaches."""
     return ~np.isfinite(values) | (np.abs(values) > RECORD_LIMIT)
 
 
-# The blocks a v7 layout states and a v6 one does not (layouts.require_v7).
+# The layout blocks that state per-arm joints, hand and body columns.
 V7_STATED = ("joints", "hand", "body")
 
 
-def read_columns_of(layout: layout_table.Layout, field: str, width: int) -> np.ndarray:
-    """Which columns of the state or the action a later stage reads, as a [width] mask.
+def read_columns_of(layout: common.Layout, field: str, width: int) -> np.ndarray:
+    """Which columns of the state or the action training reads, as a [width] mask.
 
-    In a v7 output NaN means not recorded, never 0. A v7
-    layout names what is read: each arm's position, rotation and gripper columns
-    of the state, and each arm's dpos, drot and gripper columns of the action; a
-    gripper whose method is masked is never read. A joints-only key (BimanualYAM)
-    states its pose null and writes NaN there, and a hand key (robocoin_hands)
-    masks its gripper and writes NaN there. A v6 layout states nothing about
-    unrecorded columns, and an action with a base block is not one this reads,
-    so every column of those counts as read.
+    NaN in a stored column means not recorded, never 0. A layout with joints,
+    hand and body blocks names what is read: each arm's position, rotation and
+    gripper columns of the state, and each arm's dpos, drot and gripper columns
+    of the action; a gripper whose method is masked is never read. A layout
+    without those blocks, or an action with a base block, counts every column
+    as read.
     """
     read = np.ones(width, dtype=bool)
     if not all(block in layout.v7 for block in V7_STATED):
@@ -96,16 +74,15 @@ def read_columns_of(layout: layout_table.Layout, field: str, width: int) -> np.n
     return read
 
 
-def declared_unrecorded(layout: layout_table.Layout, field: str, width: int,
+def declared_unrecorded(layout: common.Layout, field: str, width: int,
                         metadata: dict[str, Any]) -> np.ndarray:
     """The [width] columns this episode itself states it does not record, as a mask.
 
-    The ingest writer names, per field, the arm slots an episode does not record
-    (episodes.jsonl ingest_unrecorded; the v7 ingest writer holds those columns to
-    NaN): the RoboMIND Tien Kung gello's dead follower closure. Of these fields
-    only the gripper sits in the state and action columns read here. A v6 layout
-    states nothing, and an action with a base block is read whole, as in
-    read_columns_of.
+    meta/episodes.jsonl may name, per field, the arm slots an episode does not
+    record (ingest_unrecorded); those columns hold NaN. Of these fields only the
+    gripper sits in the state and action columns read here. Layouts without
+    joints, hand and body blocks, and actions with a base block, are read whole,
+    as in read_columns_of.
     """
     declared = np.zeros(width, dtype=bool)
     slots = {int(slot) for slot in
@@ -170,8 +147,7 @@ def _defect(name: str, **detail: Any) -> dict[str, Any]:
     if name not in DEFECTS:
         raise KeyError(
             f"defect {name!r} is not named in DEFECTS\n"
-            f"expected one of the names this stage records\n"
-            f"add the name before reporting it, so filter can key on it"
+            f"expected one of DEFECTS, so filter_episodes can key on it"
         )
     return {"name": name, **detail}
 
@@ -229,7 +205,7 @@ def check_metadata_gates(metadata: dict[str, Any], gates: tuple) -> list[dict[st
     return found
 
 
-def check_state(state: np.ndarray, layout: layout_table.Layout, tol: float) -> list[dict]:
+def check_state(state: np.ndarray, layout: common.Layout, tol: float) -> list[dict]:
     """State width, quaternion norm and gripper motion, against the layout."""
     found: list[dict[str, Any]] = []
     if layout.state is None:
@@ -260,7 +236,7 @@ def check_action(
     action: np.ndarray,
     state: np.ndarray | None,
     valid: np.ndarray | None,
-    layout: layout_table.Layout,
+    layout: common.Layout,
     zero_fraction: float,
 ) -> list[dict[str, Any]]:
     """Width, the state copy, the fabricated zeros and the dead columns."""
@@ -302,20 +278,16 @@ def check_extrinsics(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """One camera's recorded pose for this episode, and whether it is a rotation.
 
-    A source whose poses come from build_extrinsics is not read here. That
-    stage runs after this one and reports its own defect per record, so
-    repeating the audit would mean reading a file this run may not have yet
-    and counting the same refusal twice.
+    Poses stored in a separate per-source pose file (source "stage") are
+    checked by the camera filters (rule 5), not here.
     """
     if spec.get("kind") != "episode":
         return [], {"present": False, "kind": spec.get("kind", "none")}
     if spec["source"] == "stage":
         return [], {"kind": "episode", "source": "stage"}
     refuse = spec.get("refuse_when")
-    # The episode's own metadata can say the stored pose does not describe it,
-    # as RH20T's does for an in-hand recording. build_cache reads that flag and
-    # hands the loader an unknown pose, so counting the episode as covered here
-    # would report a pose the corpus never uses.
+    # The episode's own metadata can say the stored pose does not describe it
+    # (an in-hand recording); such a pose is unknown, not covered.
     if refuse is not None and bool(metadata.get(refuse["key"])) == bool(refuse["equals"]):
         return [], {"present": False, "refused": refuse["key"]}
     if spec["source"] == "metadata":
@@ -348,7 +320,7 @@ def check_extrinsics(
     return [], {"present": True, "rotation_ok": True}
 
 
-def sidecar_path(layout: layout_table.Layout, spec: dict[str, Any]) -> str | None:
+def sidecar_path(layout: common.Layout, spec: dict[str, Any]) -> str | None:
     """The geometry sidecar one view's spec reads, or None when it reads none."""
     if spec.get("kind") != "episode" or spec.get("source") != "sidecar":
         return None
@@ -358,7 +330,7 @@ def sidecar_path(layout: layout_table.Layout, spec: dict[str, Any]) -> str | Non
 def check_views(
     metadata: dict[str, Any],
     episode: int,
-    layout: layout_table.Layout,
+    layout: common.Layout,
     sidecars: dict[str, dict[int, dict[str, Any]]],
     tol: float,
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
@@ -366,14 +338,13 @@ def check_views(
 
     The layout keys its poses by view, because a source may publish a pose for
     one camera and not the next. A view whose spec is kind none is a camera
-    that publishes no pose, which is most of OXE and DROID's wrist: no defect,
-    and coverage that says so per camera rather than for the directory.
+    that publishes no pose: no defect, and coverage that says so per camera.
     """
     found: list[dict[str, Any]] = []
     coverage: dict[str, dict[str, Any]] = {}
     for view in layout.views:
         key = str(view["key"])
-        spec = layout_table.view_extrinsics(layout, key)
+        spec = common.view_extrinsics(layout, key)
         named = sidecar_path(layout, spec)
         defects, seen = check_extrinsics(
             metadata, sidecars.get(named) if named else None, episode, spec, tol, key,
@@ -385,12 +356,12 @@ def check_views(
 
 def validate_record(
     record: dict[str, Any],
-    layout: layout_table.Layout,
+    layout: common.Layout,
     sidecars: dict[str, dict[int, dict[str, Any]]],
     root: Path,
     args: argparse.Namespace,
 ) -> dict[str, Any]:
-    """One inventory record -> its defects, its coverage per camera and pass."""
+    """One episode record -> its defects, its coverage per camera and pass."""
     found: list[dict[str, Any]] = []
     rows_on_disk = None
 
@@ -399,8 +370,7 @@ def validate_record(
     if record["rows"] < args.min_rows:
         found.append(_defect("episode_too_short", rows=record["rows"]))
     for key, video in sorted(record["videos"].items()):
-        # Measured here rather than taken from the inventory: a stream that was
-        # truncated after the scan is exactly what this defect name is for.
+        # An absent or empty video stream is frames_missing.
         size = (root / video["path"]).stat().st_size if (
             video["path"] and (root / video["path"]).is_file()) else 0
         if size == 0:
@@ -433,7 +403,7 @@ def validate_record(
                 found.append(
                     _defect("rows_mismatch", declared=record["rows"], on_disk=rows_on_disk)
                 )
-            # A v7 column the layout does not read, or one this episode declares
+            # A column the layout does not read, or one this episode declares
             # it does not record (declared_unrecorded), that is NaN on every row
             # is the not-recorded statement, not a defect.
             absent = {
@@ -490,9 +460,10 @@ def validate_record(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--root", required=True)
-    parser.add_argument("--inventory", required=True)
+    parser.add_argument("--dir", action="append", default=[], help="an episode directory")
+    parser.add_argument("--dirs-file", help="a file of directories, one per line")
     parser.add_argument("--layouts", required=True)
-    parser.add_argument("--out", required=True)
+    parser.add_argument("--out", required=True, help="new JSONL output")
     parser.add_argument("--min-rows", type=int, default=2)
     parser.add_argument("--max-rows", type=int, default=0,
                         help="read at most this many rows per episode; 0 reads all")
@@ -502,62 +473,51 @@ def main(argv: list[str] | None = None) -> int:
                         help="report zero action rows above this share of the episode")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
-    root = stage.resolve_root(args.root)
-    inventory_path = stage.under_root(root, args.inventory)
-    layouts_path = stage.under_root(root, args.layouts)
-    out = stage.under_root(root, args.out)
+    root = common.resolve_root(args.root)
+    dirs_file = common.cli_path(args.dirs_file) if args.dirs_file else None
+    directories = common.read_dir_list(root, args.dir, dirs_file)
+    layouts_path = common.cli_path(args.layouts)
+    out = common.new_output(args.out, directories)
 
-    _, records = stage.read_jsonl(inventory_path)
-    document = layout_table.load(layouts_path)
-    directories = sorted({record["dataset"] for record in records})
-    stage.refuse_write_into_input(out, [root / name for name in directories])
-
-    resolved = {name: layout_table.resolve(document, name) for name in directories}
-    # Keyed by the file rather than by the directory: two cameras of one
-    # directory are often calibrated into one sidecar, and two directories can
-    # resolve to one layout name, so the path is what is read at most once.
+    records = [record for directory in sorted(directories)
+               for record in common.directory_episodes(root, directory)]
+    records.sort(key=lambda item: (item["dataset"], item["episode"]))
+    document = common.load_layouts(layouts_path)
+    names = sorted({record["dataset"] for record in records})
+    resolved = {name: common.resolve(document, name) for name in names}
+    # Keyed by file: two cameras of one directory, or two directories, can
+    # share one geometry sidecar, which is read once.
     sidecars: dict[str, dict[int, dict[str, Any]]] = {}
     for layout in resolved.values():
         for view in layout.views:
-            spec = layout_table.view_extrinsics(layout, view["key"])
+            spec = common.view_extrinsics(layout, view["key"])
             named = sidecar_path(layout, spec)
             if named is None or named in sidecars:
                 continue
-            sidecars[named] = load_sidecar(
-                stage.under_root(root, named),
-                spec.get("index_key", "episode_index"),
-            )
+            sidecars[named] = load_sidecar(common.under_root(root, named),
+                                           spec.get("index_key", "episode_index"))
 
-    out_records = [
-        validate_record(record, resolved[record["dataset"]], sidecars, root, args)
-        for record in records
-    ]
-
-    counts: Counter = Counter()
-    for record in out_records:
-        for defect in record["defects"]:
-            counts[defect["name"]] += 1
-    head = stage.header(
+    out_records = [validate_record(record, resolved[record["dataset"]], sidecars, root, args)
+                   for record in records]
+    counts: Counter = Counter(defect["name"] for record in out_records
+                              for defect in record["defects"])
+    head = common.header(
         "validate_episodes",
-        root=root,
-        inputs={"inventory": inventory_path, "layouts": layouts_path},
-        tree=REPO,
-        extra={
+        inputs=[common.display(root, path) for path in (*directories, layouts_path)],
+        settings={
             "min_rows": args.min_rows, "max_rows": args.max_rows,
             "quaternion_tolerance": args.quaternion_tolerance,
             "rotation_tolerance": args.rotation_tolerance,
             "zero_row_fraction": args.zero_row_fraction,
             "defect_names": list(DEFECTS),
+            "defect_counts": dict(sorted(counts.items())),
         },
     )
-    written = stage.write_jsonl(out, head, out_records)
+    common.write_jsonl(out, head, out_records)
     passed = sum(1 for record in out_records if record["pass"])
-    logger.info("%d episodes, %d clean, %d with defects",
-                len(out_records), passed, len(out_records) - passed)
+    print(f"{len(out_records)} episodes, {passed} without defects; wrote {out}")
     for name, count in sorted(counts.items()):
-        logger.info("defect %s: %d", name, count)
-    logger.info("%s %s", "wrote" if written else "unchanged", out)
+        print(f"  {name}: {count}")
     return 0
 
 

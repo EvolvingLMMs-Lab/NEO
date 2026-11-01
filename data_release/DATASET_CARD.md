@@ -17,10 +17,11 @@ Processed robot demonstrations used to pretrain NEO-VLA, an academic
 vision-language-action research model. The corpus combines nine public robot
 datasets, converted to one layout, quality-filtered and cached for training.
 
-**Status: private staging.** These files are processed derivatives of
-third-party datasets. Each source keeps its own licence and terms, and every
-source is **pending licence review** (`sources_inventory.json`,
-`UPSTREAM_TERMS.md`). No licence is granted here.
+**Status: public, incremental upload, currently incomplete.** Dataset:
+[weepiess2383/NEO-VLA-Action-Pretrain](https://huggingface.co/datasets/weepiess2383/NEO-VLA-Action-Pretrain).
+These files are processed derivatives of third-party datasets. Each source
+keeps its own licence and terms, and every source is **pending licence review**
+(`sources_inventory.json`, `UPSTREAM_TERMS.md`). No licence is granted here.
 
 ## Size
 
@@ -53,25 +54,28 @@ re-scanning the payload.
 |---|---|---|
 | manifest | `manifests/action_pretrain.json` | every directory, its cameras, arms, action layout, embodiment key, control rate and weight (schema 3) |
 | normaliser | `metadata/action_pretrain/embodiments.json` | per-embodiment q01/q99 bounds and the masks training uses |
-| stage records | `metadata/action_pretrain/*.jsonl`, `*.json` | inventory, per-episode validation defects, kept and dropped episodes with reasons, calibration records and their validation, frequency, gripper and embodiment declarations, weights; each starts with a provenance header (tool, version, commit, inputs) |
-| joint sidecars | `metadata/action_pretrain/sidecars/` | joints, hand and body for directories whose converted parquet lacks them |
+| processing records | `metadata/action_pretrain/*.jsonl`, `*.json` | episode inventory, per-episode validation defects, kept and dropped episodes with reasons, calibration records and their validation, frequency, gripper and embodiment declarations, sampling weights; each starts with a provenance header |
+| joint and body columns | `metadata/action_pretrain/sidecars/` | joints, hand and body for directories whose converted parquet lacks them |
 | processed caches | `processed/action_pretrain/` | numeric arrow files, frame index, per-episode camera geometry, rendered prompts |
 | converted directories | one per source dataset (`agibot/`, `oxe/`, ...) | per-episode parquet and video, `meta/info.json`, `meta/episodes.jsonl` |
-| layout and keys | `config/layouts/action_pretrain.json`, `config/embodiments.yaml` (code repository) | per-dataset layout with its evidence; embodiment key table |
+| layout and keys | `config/layouts/action_pretrain.json`, `config/embodiments.yaml` (code repository) | per-dataset column layout; embodiment key table |
 
 Which sources' files are shared depends on their licence review. Vendor raw
-archives are never redistributed.
+archives are never redistributed. The dataset contains data only; the filter
+scripts are in the code repository.
 
 ## Release validation
 
 The current cache index has no `pose_qc` entry. The projection-census masking
 step must be verified or completed before this corpus is described as having
-all five filtering stages applied. The code includes the original scoring and
-masking tools; this card does not certify that step for the existing cache.
+all five filtering stages applied. The code repository includes the scoring
+and pose-masking scripts; this card does not certify that step for the
+existing cache.
 
 ## Processing
 
-The tools and commands are in the code repository under `docs/preprocessing.md`.
+The filter scripts and commands are in the code repository under
+`docs/preprocessing.md`.
 
 1. **Implausible joint readings.** A joint reading beyond ±2π, or more than π
    from the median of the 5 rows of its episode centred on it, is stored as
@@ -96,21 +100,21 @@ The tools and commands are in the code repository under `docs/preprocessing.md`.
    stored frames. A view without calibration states none. Stored camera poses
    are audited, and a pose that fails the audit is unknown for that episode.
    A full-pose projection check (motion-ratio score ≥ 2.5, with a wrong-pose
-   control) scores the AgiBot head and DROID exterior poses. When the cache is
-   built with the AgiBot census, a failed head pose is written as unknown. In
-   every case the episode is kept. The DROID scores are a report.
+   control) scores the AgiBot head and DROID exterior poses. When the AgiBot
+   census is applied, a failed head pose is written as unknown. In every case
+   the episode is kept. The DROID scores are a report.
 
 ### Which masks are in the files and which are applied at load time
 
 | effect | where it lives |
 |---|---|
 | dropped episodes | **materialised**: absent from the kept list, the manifest and the cache; listed with their reason in `kept.jsonl` |
-| implausible joint readings | **materialised**: NaN in the joint sidecars and in the cache built from them |
+| implausible joint readings | **materialised**: NaN in the stored joint columns and in the cache |
 | not-recorded values | **materialised**: NaN (never 0) in stored columns |
 | dead, constant and wrap-gated channels | **recorded, applied by the loader**: listed per directory and key in `embodiments.json`; the stored values are unchanged |
 | action outliers | **applied by the loader** per sample and step from the normaliser bounds; nothing is removed from the data |
 | finite values beyond 1e6 | reported by validation; **applied by the loader**, which reads them as not recorded |
-| failed camera poses | **materialised** in the cache's per-episode camera arrays as the unknown marker, when the cache is built with the pose-QC census; the cache index then records the census files and verdict counts under `pose_qc` |
+| failed camera poses | **materialised** in the per-episode camera arrays as the unknown marker when the pose-QC census is applied; **not yet applied** to the current cache (no `pose_qc` entry) |
 
 Anyone training with other code must apply the loader-side masks from
 `embodiments.json` and the manifest. They are not baked into the values.
@@ -123,8 +127,8 @@ Anyone training with other code must apply the loader-side masks from
   columns are NaN and masked.
 - Control rates are each source's nominal rate. Where stored timestamps
   disagree by more than 10%, the rate is stated as unknown.
-- The counts above describe this build. A rebuild with different inputs or
-  tools can give different counts.
+- The counts above describe this release. Processing other source revisions
+  can give different counts.
 
 ## Licences and citation
 

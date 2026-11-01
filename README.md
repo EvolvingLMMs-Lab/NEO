@@ -19,7 +19,7 @@
   <a href="https://weichenfan.github.io/NEO-VLA-Page/"><b>Project Page</b></a> ·
   <a href="#method"><b>Method</b></a> ·
   <a href="docs/training.md"><b>Training</b></a> ·
-  <a href="docs/preprocessing.md"><b>Data Preparation</b></a> ·
+  <a href="docs/preprocessing.md"><b>Data Filtering</b></a> ·
   <a href="#citation"><b>Citation</b></a>
 </p>
 <p align="center">
@@ -73,10 +73,10 @@ conda create -n neo-vla python=3.10 -y
 conda activate neo-vla
 # Install the PyTorch CUDA build appropriate for your system first.
 pip install -e .
-pip install -e '.[prep]'  # for data preparation
+pip install -e '.[prep]'  # for the camera-calibration filters
 ```
 
-Set the backbone, prepared robot corpus and output directories:
+Set the backbone, processed robot corpus and output directories:
 
 ```bash
 export NEO_VLA_BACKBONE=/path/to/NEOpp-2B-SFT
@@ -88,15 +88,16 @@ bash scripts/stage1.sh --print-argv
 ```
 
 The backbone checkpoint and tokenizer are obtained separately. The robot corpus
-must contain a manifest, prompt cache and normalizer; see the
-[preprocessing guide](docs/preprocessing.md) to prepare them.
+must contain a manifest, prompt cache and normalizer. Use the processed
+[NEO-VLA-Action-Pretrain](https://huggingface.co/datasets/weepiess2383/NEO-VLA-Action-Pretrain)
+release, or a compatible corpus you prepare yourself.
 
 ## Training
 
 | Stage | Trainable components | Robot data | Co-training data | Launcher |
 |---|---|---|---|---|
-| **1 · Action pretraining** | Action expert and prefix tokenizers | Prepared pretraining corpus | — | [`stage1.sh`](scripts/stage1.sh) |
-| **2 · Joint training** | Full policy | Prepared pretraining corpus | Multimodal understanding data | [`stage2.sh`](scripts/stage2.sh) |
+| **1 · Action pretraining** | Action expert and prefix tokenizers | Processed pretraining corpus | — | [`stage1.sh`](scripts/stage1.sh) |
+| **2 · Joint training** | Full policy | Processed pretraining corpus | Multimodal understanding data | [`stage2.sh`](scripts/stage2.sh) |
 | **3 · Robot adaptation** | Full policy | Your real-robot corpus | Multimodal understanding data | [`posttrain_real.sh`](scripts/posttrain_real.sh) |
 
 **Stages 2 and 3 co-train on multimodal understanding data.** COCO ShareGPT is
@@ -122,21 +123,27 @@ initialization, distributed launch commands and recipe parameters.
   <img src="docs/assets/preprocessing.png" alt="Five-stage preprocessing: joint readings, unreliable channels, action outliers, corrupt episodes and camera calibration consistency" width="100%">
 </p>
 
-The prepared action corpus combines nine robot-data families. Its recorded
-inventory contains **2,231,583 episodes** and **928,401,030 rows** across 2,704
-source directories. The pipeline masks invalid readings and action groups,
-drops unusable episodes, and marks camera poses unknown when calibration
-checks fail.
+The processed action corpus combines nine robot-data families: **2,231,583
+episodes** and **928,401,030 rows** across 2,704 source directories. Five
+filters exclude implausible joint readings, mask unreliable channels and
+out-of-band action groups, drop corrupt episodes, and mark camera poses unknown
+when calibration checks fail.
+
+The processed data and normalization records are published on Hugging Face
+as [weepiess2383/NEO-VLA-Action-Pretrain](https://huggingface.co/datasets/weepiess2383/NEO-VLA-Action-Pretrain).
+The upload is incremental and currently incomplete. This repository contains
+the filter scripts; the data and normalizer are obtained from the dataset.
 
 | Resource | Contents |
 |---|---|
-| [Preprocessing guide](docs/preprocessing.md) | Filtering rules, commands and metadata contracts |
+| [Hugging Face dataset](https://huggingface.co/datasets/weepiess2383/NEO-VLA-Action-Pretrain) | Processed corpus and normalization records (incremental upload) |
+| [Filtering guide](docs/preprocessing.md) | The five filtering rules and their scripts |
 | [Dataset card](data_release/DATASET_CARD.md) | Corpus inventory, masks and verification status |
-| [Data release](data_release/README.md) | Dataset layout, source inventory and release status |
+| [Data release](data_release/README.md) | Dataset layout and release status |
 | [Upstream terms](data_release/UPSTREAM_TERMS.md) | Per-source licenses and redistribution requirements |
 
-Model checkpoints and dataset payloads are not included in this repository.
-The dataset card records verification and licensing status for the processed-data release.
+Model checkpoints are not included in this repository. Each source dataset
+keeps its own terms; see the dataset card and upstream terms.
 
 ## Citation
 

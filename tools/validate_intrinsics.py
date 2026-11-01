@@ -1,28 +1,26 @@
-"""Stage 8: what is wrong with a calibration record, and what is true of its view.
+"""Rule 5 (intrinsics): check each calibration record against its frames. It drops nothing.
 
-It drops nothing: one record per record of the intrinsics file, in the same
-order, holding a named defect list, a named property list and a pass flag. Only
-a defect fails the record; a property states what is true of its view. Reporting
-is separate from refusing as validate_episodes is from filter_episodes: a defect
-that turns out to be common is a decision about the corpus, not a silent loss.
+One output record per calibration record, in the same order, with a named
+defect list, a named property list and a pass flag. Checks: required fields
+and finite values, positive frame size and focal lengths, pixel aspect against
+the median of the same directory and view, principal point near the centre
+and inside the frame, horizontal and vertical field of view, the calibration's
+aspect against the frame size stored in meta/info.json, duplicate records, and
+a provenance the loader accepts.
 
-The checks separate a calibration fitted against a distorted frame from one
-measured at its own resolution. Each reads a record against something outside
-it: the frame it names, the other records of its own view, or the frames the
-corpus stores. Agreeing with itself is not evidence and is reported as such.
+Input records are JSONL, one per (dataset, episode, view), with fx, fy, cx,
+cy, width, height (the raster the calibration was measured against) and
+provenance; a leading {"provenance": ...} header line is accepted.
 
 Usage:
-    python tools/validate_intrinsics.py --root /corpus \
-        --intrinsics metadata/C/intrinsics_agibot.jsonl \
-        --intrinsics metadata/C/intrinsics_rh20t.jsonl \
-        --layouts config/layouts/action_pretrain.json \
-        --out metadata/C/intrinsics_validation.jsonl
+    python tools/validate_intrinsics.py --root $NEO_VLA_DATA_ROOT \
+        --intrinsics metadata/action_pretrain/intrinsics_agibot.jsonl \
+        --out filtered/intrinsics_validation.jsonl
 """
 from __future__ import annotations
 
 import argparse
 import json
-import logging
 import math
 import statistics
 import sys
@@ -31,17 +29,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import build_intrinsics
-import layouts as layout_table
-import scan_source
-import stage
-from build_manifest import frame_shape
+import filter_common as common
 
 from neo_vla.data import rays
 
-logger = logging.getLogger("validate_intrinsics")
-
-REPO = Path(__file__).resolve().parent.parent
+# Default bounds: the principal point within 10% of each side from the centre
+# (calibrations measured against another frame size sit far outside it), and
+# the field-of-view range of the cameras these datasets use.
+PRINCIPAL_POINT_MARGIN = 0.10
+FIELD_OF_VIEW_DEGREES = {"horizontal": (40.0, 140.0), "vertical": (30.0, 120.0)}
 
 DEFECTS = (
     "field_missing",
@@ -120,9 +116,8 @@ def optical_aspect(record: dict[str, Any]) -> float | None:
     """The width over height of the field this calibration sees, or None.
 
     Reported rather than judged. fx over fy is not one wherever a frame is
-    stored at an aspect its optics do not have, which is true of AgiBot's
-    whole corpus, so the ratio alone says nothing about whether a calibration
-    is sound. What it does say is what shape the camera's field is, and that
+    stored at an aspect its optics do not have, so the ratio alone says
+    nothing about whether a calibration is sound. What it does say is what shape the camera's field is, and that
     is worth having in the file beside the frame it was measured against.
     """
     fx, fy = float(record["fx"]), float(record["fy"])
@@ -162,11 +157,9 @@ def check_stored_frame(
 ) -> list[dict[str, Any]]:
     """Whether the loader could put this calibration on the frames it will read.
 
-    Against the size the corpus stores rather than against the token grid that
-    size snaps to: the grid stands for any frame within half a token of it,
-    which on this corpus's tiles takes an aspect up to 18% from the stored one.
-    A calibration measured at another aspect than the cache holds is not a wrong
-    number: it is a cache to rebuild, or a view that has to give up its rays.
+    Against the frame size stored in meta/info.json, within half a pixel per
+    side (rays.frame_band). A calibration measured at another aspect does not
+    describe the stored frames.
     """
     if shape is None or int(record["height"]) <= 0:
         return []
@@ -280,8 +273,8 @@ def stored_shapes(
             path = root / dataset / "meta" / "info.json"
             columns[dataset] = None
             if path.is_file():
-                inputs[stage.relative(root, path)] = path
-                columns[dataset] = scan_source.columns_of(
+                inputs[common.relative(root, path)] = path
+                columns[dataset] = common.columns_of(
                     json.loads(path.read_text(encoding="utf-8"))
                 )
         stored = columns[dataset]
@@ -291,9 +284,9 @@ def stored_shapes(
             raise KeyError(
                 f"{dataset} stores no column {view!r}\n"
                 f"expected one of {sorted(stored)[:6]}\n"
-                f"rebuild the intrinsics file against this corpus"
+                f"check that the calibration records belong to this data root"
             )
-        shapes[(dataset, view)] = frame_shape(stored, view)
+        shapes[(dataset, view)] = common.frame_shape(stored, view)
     return shapes, inputs
 
 
@@ -366,68 +359,33 @@ def validate_record(
     }
 
 
-def per_source(
-    document: dict[str, Any], out_records: list[dict[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    """The defect and property counts, grouped by the source the layout names."""
-    grouped: dict[str, dict[str, Any]] = {}
-    for record in out_records:
-        directory = record["dataset"]
-        source = layout_table.resolve(document, directory).source if directory else "unknown"
-        entry = grouped.setdefault(source, {"records": 0, "clean": 0,
-                                            "defects": Counter(), "properties": Counter()})
-        entry["records"] += 1
-        entry["clean"] += int(record["pass"])
-        for field in ("defects", "properties"):
-            for item in record[field]:
-                entry[field][item["name"]] += 1
-    return {source: {**entry,
-                     "defects": dict(sorted(entry["defects"].items())),
-                     "properties": dict(sorted(entry["properties"].items()))}
-            for source, entry in sorted(grouped.items())}
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--root", required=True, help="the one corpus root")
+    parser.add_argument("--root", required=True, help="the data root holding the directories")
     parser.add_argument("--intrinsics", action="append", required=True,
-                        help="a build_intrinsics output; repeat once per source")
-    parser.add_argument("--layouts", required=True,
-                        help="the layout file, to group the counts by source")
-    parser.add_argument("--out", required=True, help="where the validation goes")
-    parser.add_argument("--exclusive-output", action="store_true",
-                        help="create a new output only, without replacement or rename")
-    # The defaults are build_intrinsics' own bounds, so this stage reports what
-    # that stage would have refused rather than a second opinion about it.
-    horizontal = build_intrinsics.FIELD_OF_VIEW_DEGREES["horizontal"]
-    vertical = build_intrinsics.FIELD_OF_VIEW_DEGREES["vertical"]
+                        help="a calibration record file; repeat once per source")
+    parser.add_argument("--out", required=True, help="new JSONL output")
     parser.add_argument("--aspect-tolerance", type=float, default=ASPECT_TOLERANCE,
                         help="how far a pixel aspect may sit from its view's median")
-    parser.add_argument("--centre-margin", type=float,
-                        default=build_intrinsics.PRINCIPAL_POINT_MARGIN,
+    parser.add_argument("--centre-margin", type=float, default=PRINCIPAL_POINT_MARGIN,
                         help="how far the principal point may sit from the centre, "
                              "as a share of the side")
+    horizontal = FIELD_OF_VIEW_DEGREES["horizontal"]
+    vertical = FIELD_OF_VIEW_DEGREES["vertical"]
     parser.add_argument("--horizontal-low", type=float, default=horizontal[0])
     parser.add_argument("--horizontal-high", type=float, default=horizontal[1])
     parser.add_argument("--vertical-low", type=float, default=vertical[0])
     parser.add_argument("--vertical-high", type=float, default=vertical[1])
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
-    root = stage.resolve_root(args.root)
-    sources = {stage.relative(root, stage.under_root(root, name)):
-               stage.under_root(root, name) for name in args.intrinsics}
-    layouts_path = stage.under_root(root, args.layouts)
-    out = stage.under_root(root, args.out)
-    if args.exclusive_output and (out.exists() or out.is_symlink()):
-        raise FileExistsError(out)
+    root = common.resolve_root(args.root)
+    sources = {common.display(root, common.cli_path(name)): common.cli_path(name)
+               for name in args.intrinsics}
+    out = common.new_output(args.out, list(sources.values()))
 
-    # Concatenated in file order. The per-view passes group by directory, and
-    # one directory's cameras are read by one source, so no check sees two
-    # sources' records as one view's.
+    # Concatenated in file-name order; one directory's views come from one source.
     records = [record for name in sorted(sources)
-               for record in stage.read_jsonl(sources[name])[1]]
-    document = layout_table.load(layouts_path)
+               for record in common.read_jsonl(sources[name])[1]]
     shapes, read = stored_shapes(root, records)
     corpus = Corpus(aspects=view_aspects(records), frames=shapes,
                     per_view=calibrations_per_view(records))
@@ -444,12 +402,10 @@ def main(argv: list[str] | None = None) -> int:
         for field, found in counts.items():
             for item in record[field]:
                 found[item["name"]] += 1
-    head = stage.header(
+    head = common.header(
         "validate_intrinsics",
-        root=root,
-        inputs={**sources, "layouts": layouts_path, **read},
-        tree=REPO,
-        extra={
+        inputs=[*sources, *read],
+        settings={
             "aspect_tolerance": args.aspect_tolerance,
             "centre_margin": args.centre_margin,
             "horizontal_degrees": [args.horizontal_low, args.horizontal_high],
@@ -459,18 +415,15 @@ def main(argv: list[str] | None = None) -> int:
             "defect_names": list(DEFECTS),
             "property_names": list(PROPERTIES),
             "records": len(out_records),
-            "by_source": per_source(document, out_records),
+            "defect_counts": dict(sorted(counts["defects"].items())),
+            "property_counts": dict(sorted(counts["properties"].items())),
         },
     )
-    written = stage.write_jsonl(out, head, out_records, exclusive=args.exclusive_output)
+    common.write_jsonl(out, head, out_records)
     passed = sum(1 for record in out_records if record["pass"])
-    logger.info("%d calibrations, %d clean, %d with defects",
-                len(out_records), passed, len(out_records) - passed)
+    print(f"{len(out_records)} calibrations, {passed} without defects; wrote {out}")
     for name, count in sorted(counts["defects"].items()):
-        logger.info("defect %s: %d", name, count)
-    for name, count in sorted(counts["properties"].items()):
-        logger.info("property %s: %d", name, count)
-    logger.info("%s %s", "wrote" if written else "unchanged", out)
+        print(f"  {name}: {count}")
     return 0
 
 

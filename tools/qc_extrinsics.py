@@ -1,24 +1,28 @@
-"""Stage 7d: whether a source's stored pose describes the camera its frames show.
+"""Rule 5 (pose): score whether a stored camera pose describes the camera its frames show.
 
-No labels and no detector. The arm is the only thing that moves through a
-scene, so a right pose puts the projected arm points on moving pixels and a
-wrong one leaves them on static background. The score is the motion energy at
-the projected points over the motion energy of the whole frame.
+No labels and no detector. The arm is the only thing that moves in these
+scenes, so under a correct pose the recorded 3-D arm points project onto moving
+pixels, and under a wrong one onto static background. The score is the mean
+motion energy at the projected points over the mean motion energy of the whole
+frame: ok at 2.5 or above, fail below, inconclusive when fewer than 30 samples
+(or no calibration, pose or video) exist. With --control every episode is also
+scored under a deliberately wrong pose (another directory's pose at least 10
+degrees away), and the header reports how often the own pose wins.
 
-One record per episode and its reference camera: the score, the samples behind
-it and a verdict of ok, fail or inconclusive. With --control the episode is
-scored again under a pose recorded elsewhere, which reads as wrong.
+A census for filter_camera_poses.py is a run with --control and without
+--sample.
 
 Usage:
-    python tools/qc_extrinsics.py --root /corpus --source agibot --control \
-        --calib calib/agibot_extrinsics --intrinsics metadata/C/intrinsics_agibot.jsonl \
-        --layouts config/layouts/action_pretrain.json --out metadata/C/qc_extrinsics_agibot.jsonl
+    python tools/qc_extrinsics.py --root $NEO_VLA_DATA_ROOT --source agibot --control \
+        --calib <AgiBot pose tree holding head_extrinsic_sidecar.jsonl> \
+        --intrinsics metadata/action_pretrain/intrinsics_agibot.jsonl \
+        --dirs-file agibot_dirs.txt --layouts config/layouts/action_pretrain.json \
+        --out filtered/qc_extrinsics_agibot.jsonl --workers 32
 """
 from __future__ import annotations
 
 import argparse
 import json
-import logging
 import sys
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
@@ -27,29 +31,16 @@ from typing import Any, Iterable, Iterator
 
 import av
 import cv2
-import layouts as layout_table
+import filter_common as common
 import numpy as np
 import pyarrow.parquet as parquet
-import stage
-from scan_source import directory_inputs, episode_files, read_dir_list, video_files
 
-logger = logging.getLogger("qc_extrinsics")
-
-REPO = Path(__file__).resolve().parent.parent
-
-# The scoring core is carried over from an earlier motion-energy QC script
-# (the "kit" below), which measured it over 36,685 DROID episodes on their
-# native video. It is copied here so the corpus tools depend on nothing
-# outside this repository. The ratio, the blur, the
-# static-frame floor and the speed floor are the kit's numbers unchanged.
-#
-# The kit measures motion on half of a 1280 by 720 frame and samples a point of
-# that 640 by 360 map. AgiBot's stored frame is 640 by 480, so the map is the
-# stored frame itself: halving it again would spread the blur over twice the
-# share of the scene the kit spreads it over. Dropping the halving is what
-# keeps both pixel constants meaning here what they mean on the kit's raster.
-KIT_BLUR_SIGMA = 5.0
-KIT_MIN_UV_SPEED = 1.5
+# The motion-energy score's constants: blur width and point-speed floor in
+# pixels (defined on a 640x360 motion map; AgiBot's stored 640x480 frame is used
+# as the map directly), the whole-frame floor below which a frame pair holds no
+# motion, the minimum number of samples, the threshold and the frame stride.
+BLUR_SIGMA = 5.0
+MIN_UV_SPEED = 1.5
 STATIC_FRAME_ENERGY = 0.2
 MIN_SAMPLES = 30
 SCORE_THRESHOLD = 2.5
@@ -61,7 +52,7 @@ VERDICTS = ("ok", "fail", "inconclusive")
 # wrong-pose control. Another directory is not enough on its own: AgiBot's head
 # poses cluster, and a quarter of pairs drawn from two task directories sit
 # within five degrees of each other. Ten degrees moves a projected point by
-# about 57 pixels at this corpus's focal length, at any depth, which is more
+# about 57 pixels at AgiBot's focal length, at any depth, which is more
 # than ten times the blur the score reads through.
 MIN_CONTROL_ROTATION_DEGREES = 10.0
 
@@ -81,9 +72,8 @@ METRES_PER_UNIT = {"m": 1.0, "cm": 0.01, "mm": 0.001}
 # reference and no pose is stated for them.
 REFERENCE_ROLE = {"agibot": "head"}
 
-# AgiBot's pose sidecar, one record per episode, and the fields the join and
-# the pose come from. The prepared extrinsics file carries the rotation of this
-# same pose and no translation, and a point cannot be projected without one.
+# AgiBot's per-episode pose file, its join key and the full 4x4 pose (points
+# cannot be projected from a rotation alone).
 AGIBOT_SIDECAR = "head_extrinsic_sidecar.jsonl"
 AGIBOT_KEY = "raw_file_name"
 AGIBOT_POSE = "T_base_from_cam_4x4"
@@ -102,10 +92,10 @@ def motion_scores(
     """The motion-energy score of each projection of one camera, in one pass.
 
     frames yields the stored frames the difference is taken across, as gray
-    planes with the index each one has in the video. Everything the score rests
-    on is the kit's: the blurred absolute difference, the whole-frame floor
-    below which a pair of frames holds no motion, the speed floor a point has
-    to clear in the image to be sampled, and the ratio of the two means.
+    planes with the index each one has in the video. The motion map is the
+    blurred absolute frame difference; frame pairs below the whole-frame floor
+    hold no motion, points moving slower than the speed floor in the image are
+    not sampled, and the score is the ratio of the two means.
 
     Several projections are scored together so that a pose and its control read
     one decode of the video rather than two. They share the motion map, which
@@ -166,11 +156,9 @@ def project(
 ) -> tuple[np.ndarray, np.ndarray]:
     """The sampled points in stored pixels, and which of them the camera sees.
 
-    A pinhole projection, as the kit's is. A record's distortion model is not
-    applied: nobody established whether the delivered frames are the raw stream
-    or a rectified one, so undistorting could move a point that was already in
-    place. On AgiBot it would move a sampled point by three to five pixels,
-    which is inside the blur the score reads through.
+    A pinhole projection. Lens distortion is not applied: whether the stored
+    frames are rectified is not recorded, and on AgiBot the correction moves a
+    point by three to five pixels, inside the blur the score reads through.
     """
     camera = np.einsum(
         "ij,tkj->tki", camera_from_base[:3, :3], points) + camera_from_base[:3, 3]
@@ -188,11 +176,9 @@ def project(
 def state_points(state: np.ndarray, spec: list[dict[str, Any]]) -> np.ndarray:
     """The stored state -> the points to sample, in metres, one row per step.
 
-    The kit samples the forearm and the fingers of a reconstructed arm, and
-    leaves the base joints out because they barely move and dilute the ratio.
-    Our conversion of AgiBot publishes end-effector poses and no joint angles,
-    so the arm cannot be reconstructed at all; the end effector is the most
-    distal point there is, which is the point the kit's rule asks for.
+    The stored AgiBot state holds end-effector positions per arm; the end
+    effector is the most distal, fastest-moving point of the arm, which is what
+    the score samples (slow base links would dilute the ratio).
     """
     return np.stack(
         [state[:, arm["at"]:arm["at"] + 3] * arm["metres"] for arm in spec], axis=1)
@@ -201,7 +187,7 @@ def state_points(state: np.ndarray, spec: list[dict[str, Any]]) -> np.ndarray:
 POINTS = {"agibot": state_points}
 
 
-def reference_view(layout: layout_table.Layout, source: str, directory: str) -> tuple[str, int]:
+def reference_view(layout: common.Layout, source: str, directory: str) -> tuple[str, int]:
     """The layout view this source's stored pose is the pose of, and its slot."""
     role = REFERENCE_ROLE[source]
     found = [view for view in layout.views if view.get("role") == role]
@@ -214,7 +200,7 @@ def reference_view(layout: layout_table.Layout, source: str, directory: str) -> 
     return str(found[0]["key"]), int(found[0]["slot"])
 
 
-def points_spec(layout: layout_table.Layout, directory: str) -> tuple[list[dict[str, Any]], int]:
+def points_spec(layout: common.Layout, directory: str) -> tuple[list[dict[str, Any]], int]:
     """Which state columns hold a point, what puts it in metres, and the width."""
     state = layout.state
     if state is None:
@@ -245,23 +231,15 @@ def rotation_degrees(first: np.ndarray, second: np.ndarray) -> float:
 
 
 def stage_records(path: Path) -> Iterator[dict[str, Any]]:
-    """The records of a jsonl stage output, streamed rather than held.
-
-    The calibration file carries one record per camera of every episode, and
-    holding a source's whole file as parsed objects costs more memory than the
-    scores it is read for.
-    """
+    """The records of a calibration record file, streamed; a header line is skipped."""
     with open(path, encoding="utf-8") as handle:
-        first = handle.readline()
-        if not first or "provenance" not in json.loads(first):
-            raise ValueError(
-                f"{path} does not start with a provenance header\n"
-                f"expected the header every stage output writes on line 1\n"
-                f"re-run the stage that writes this file"
-            )
-        for line in handle:
-            if line.strip():
-                yield json.loads(line)
+        for number, line in enumerate(handle):
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            if number == 0 and isinstance(record, dict) and set(record) == {"provenance"}:
+                continue
+            yield record
 
 
 def calibrations(path: Path, slot: int, wanted: set[str]) -> dict[tuple[str, int], dict[str, Any]]:
@@ -322,17 +300,17 @@ def read_agibot(
     scene's arm against another's pose.
     """
     poses, files = agibot_sidecars(calib)
-    names = [stage.relative(root, directory) for directory in directories]
+    names = [common.relative(root, directory) for directory in directories]
     counts: Counter = Counter()
     items: list[dict[str, Any]] = []
     references = set()
     for directory, name in zip(directories, names):
-        layout = layout_table.resolve(document, name)
+        layout = common.resolve(document, name)
         view, slot = reference_view(layout, "agibot", name)
         references.add((view, slot))
         spec, width = points_spec(layout, name)
-        parquets = episode_files(directory, "data", ".parquet")
-        videos = video_files(directory, [view])[view]
+        parquets = common.episode_files(directory, "data", ".parquet")
+        videos = common.video_files(directory, [view])[view]
         with open(directory / "meta" / "episodes.jsonl", encoding="utf-8") as handle:
             for line in handle:
                 if not line.strip():
@@ -352,7 +330,7 @@ def read_agibot(
                         f"{name} episode {index} has {episode['length']} rows, "
                         f"sidecar {key} says {sidecar['length']}\n"
                         f"expected the two to agree, which confirms the join\n"
-                        f"re-stage the pose tree against this copy of the corpus"
+                        f"check that the pose tree belongs to these directories"
                     )
                 items.append({
                     "source": "agibot", "dataset": name, "episode": index,
@@ -374,7 +352,7 @@ def read_agibot(
         item["calibration"] = stored.get((item["dataset"], item["episode"]))
         if item["calibration"] is None:
             counts["episode_without_calibration"] += 1
-    inputs = {stage.relative(root, path): path for path in [*files, intrinsics]}
+    inputs = {common.display(root, path): path for path in [*files, intrinsics]}
     return items, counts, inputs
 
 
@@ -386,7 +364,7 @@ def add_controls(items: list[dict[str, Any]]) -> None:
 
     Half the list away and then forward to the first pose recorded in another
     directory that also points somewhere else. Both conditions are needed: one
-    directory's episodes share a session, and two directories of this corpus
+    directory's episodes share a session, and two AgiBot directories
     often share a head pose, so a different directory alone would compare a
     pose against itself and call the agreement a control.
     """
@@ -471,8 +449,8 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
 
     frames = gray_frames(Path(item["video"]), len(state), STRIDE)
     results, moving = motion_scores(
-        frames, projections, STRIDE, size=size, sigma=KIT_BLUR_SIGMA,
-        min_uv_speed=KIT_MIN_UV_SPEED)
+        frames, projections, STRIDE, size=size, sigma=BLUR_SIGMA,
+        min_uv_speed=MIN_UV_SPEED)
     score, used = results[0]
     record["score"] = score
     record["samples"] = used
@@ -530,41 +508,37 @@ def spread(items: list[dict[str, Any]], sample: int) -> list[dict[str, Any]]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--root", required=True, help="the one corpus root")
+    parser.add_argument("--root", required=True, help="the data root")
     parser.add_argument("--source", required=True, choices=sorted(READERS),
-                        help="which reader to use")
+                        help="which pose reader to use")
     parser.add_argument("--calib", required=True,
-                        help="the pose tree of that source, under the root")
+                        help="the source's pose tree")
     parser.add_argument("--intrinsics", required=True,
                         help="the calibration records the points are projected through")
     parser.add_argument("--dir", action="append", default=[], help="a directory to read")
     parser.add_argument("--dirs-file", help="a file of directories, one per line")
     parser.add_argument("--layouts", required=True, help="the layout file naming the views")
-    parser.add_argument("--out", required=True, help="where the scores go")
+    parser.add_argument("--out", required=True, help="new JSONL output")
     parser.add_argument("--control", action="store_true",
                         help="also score each episode under another directory's pose")
     parser.add_argument("--sample", type=int, default=0,
-                        help="score this many episodes, spread evenly over the directories")
+                        help="score this many episodes, spread evenly; 0 scores all")
     parser.add_argument("--workers", type=int, default=1)
-    parser.add_argument("--threshold", type=float, default=SCORE_THRESHOLD)
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
-    root = stage.resolve_root(args.root)
-    dirs_file = stage.under_root(root, args.dirs_file) if args.dirs_file else None
-    directories = read_dir_list(root, args.dir, dirs_file)
-    calib = stage.under_root(root, args.calib)
-    intrinsics = stage.under_root(root, args.intrinsics)
-    out = stage.under_root(root, args.out)
-    stage.refuse_write_into_input(out, [*directories, calib])
+    root = common.resolve_root(args.root)
+    dirs_file = common.cli_path(args.dirs_file) if args.dirs_file else None
+    directories = common.read_dir_list(root, args.dir, dirs_file)
+    calib = common.cli_path(args.calib)
+    intrinsics = common.cli_path(args.intrinsics)
+    layouts_path = common.cli_path(args.layouts)
+    out = common.new_output(args.out, [*directories, calib])
 
-    layouts_path = stage.under_root(root, args.layouts)
-    document = layout_table.load(layouts_path)
+    document = common.load_layouts(layouts_path)
     read, counts, inputs = READERS[args.source](
         root, calib, intrinsics, directories, document)
     read.sort(key=lambda item: (item["dataset"], item["episode"]))
-    # The header states both counts. A sampled run scores a part of what it
-    # read, and a file that said only the one number would read as a census.
+    # Both counts are recorded, so a sampled run is never read as a census.
     items = spread(read, args.sample)
     if args.control:
         add_controls(items)
@@ -578,37 +552,33 @@ def main(argv: list[str] | None = None) -> int:
     measured = [record["score"] for record in records if record["score"] is not None]
     controls = [record["control_score"] for record in records
                 if record["control_score"] is not None]
-    beats = win_rate(records)
-    head = stage.header(
+    head = common.header(
         "qc_extrinsics",
-        root=root,
-        inputs={**directory_inputs(root, directories, dirs_file), **inputs,
-                "layouts": layouts_path},
-        tree=REPO,
-        extra={"source": args.source, "directories": len(directories),
-               "episodes": len(records), "episodes_read": len(read),
-               "sample": args.sample, "threshold": args.threshold,
-               "stride": STRIDE, "min_samples": MIN_SAMPLES,
-               "blur_sigma": KIT_BLUR_SIGMA, "min_uv_speed": KIT_MIN_UV_SPEED,
-               "control_rotation_floor_deg": MIN_CONTROL_ROTATION_DEGREES,
-               "verdicts": dict(sorted(verdicts.items())),
-               "control_verdicts": dict(sorted(control_verdicts.items())),
-               "score_percentiles": distribution(measured),
-               "control_percentiles": distribution(controls),
-               "win_rate": beats,
-               "counts": dict(sorted(counts.items()))},
+        inputs=[*(common.relative(root, path) for path in directories), *inputs,
+                common.display(root, layouts_path)],
+        settings={"source": args.source, "directories": len(directories),
+                  "episodes": len(records), "episodes_read": len(read),
+                  "sample": args.sample, "threshold": SCORE_THRESHOLD,
+                  "stride": STRIDE, "min_samples": MIN_SAMPLES,
+                  "blur_sigma": BLUR_SIGMA, "min_uv_speed": MIN_UV_SPEED,
+                  "control_rotation_floor_deg": MIN_CONTROL_ROTATION_DEGREES,
+                  "verdicts": dict(sorted(verdicts.items())),
+                  "control_verdicts": dict(sorted(control_verdicts.items())),
+                  "score_percentiles": distribution(measured),
+                  "control_percentiles": distribution(controls),
+                  "win_rate": win_rate(records),
+                  "counts": dict(sorted(counts.items()))},
     )
-    written = stage.write_jsonl(out, head, records)
-    logger.info("%s: %d episodes scored over %d directories",
-                args.source, len(records), len(directories))
+    common.write_jsonl(out, head, records)
+    print(f"{args.source}: {len(records)} episodes scored over {len(directories)} directories")
     for verdict in VERDICTS:
-        logger.info("%s %d", verdict, verdicts[verdict])
+        print(f"  {verdict}: {verdicts[verdict]}")
     if controls:
-        logger.info("median %.2f against control median %.2f, own pose wins %s",
-                    float(np.median(measured)), float(np.median(controls)), beats)
+        print(f"  median {float(np.median(measured)):.2f}, control median "
+              f"{float(np.median(controls)):.2f}, own pose wins {win_rate(records)}")
     for reason, count in sorted(counts.items()):
-        logger.info("%s %d", reason, count)
-    logger.info("%s %s", "wrote" if written else "unchanged", out)
+        print(f"  {reason}: {count}")
+    print(f"wrote {out}")
     return 0
 
 

@@ -1,40 +1,36 @@
-"""Stage 3: what survives, and a named reason for everything that does not.
+"""Rule 4 (part 2): drop corrupt episodes and record the rule that fired.
 
-Reads validation.jsonl and writes one kept record per surviving episode plus one
-dropped record per removal, naming the rule that fired and the value that fired
-it. Kept plus dropped equals validated, checked before the file is written: a
-rule that drops without recording is a defect in this tool, not in the corpus.
+Reads validate_episodes.py output and writes one kept record per surviving
+episode and one dropped record per removal, naming the first listed rule the
+episode's defects match and the value that fired it. Kept plus dropped must
+equal validated. Defects not named by a rule are reported and kept.
 
-The kept records carry the position of each episode in its directory's kept
-list. That position, not the episode index, is what every later stage keys on,
-because a filtered directory renumbers everything after its first drop.
+Kept records carry each episode's position in its directory's kept list, the
+order processed arrays are indexed by after filtering.
 
 Usage:
-    python tools/filter_episodes.py --root /corpus --validation metadata/C/validation.jsonl \
-        --drop episode_unreadable --drop frames_missing --out metadata/C/kept.jsonl
+    python tools/filter_episodes.py --root $NEO_VLA_DATA_ROOT \
+        --validation filtered/validation.jsonl --out filtered/kept.jsonl \
+        --drop data_file_missing --drop episode_unreadable --drop rows_mismatch \
+        --drop frames_missing --drop episode_too_short --drop state_width_mismatch \
+        --drop action_width_mismatch --drop not_finite --drop quaternion_not_unit \
+        --drop action_equals_state
 """
 from __future__ import annotations
 
 import argparse
-import logging
 import sys
 from collections import Counter
 from pathlib import Path
 from typing import Any
 
-import stage
+import filter_common as common
 
-logger = logging.getLogger("filter_episodes")
-
-# How many unreadable episodes the refusal names before it stops listing.
+# How many unreadable kept episodes the refusal lists.
 LISTED_UNREADABLE = 10
 
-REPO = Path(__file__).resolve().parent.parent
-
-# The defects that mean the episode's bytes are not there. Nothing later can
-# recover from one: the loader opens the file, raises, and takes the worker
-# and then the collective down with it. Every other defect describes content
-# a run may still reasonably train on, so only these refuse on their own.
+# Defects that leave no bytes to read. A kept episode with one of these would
+# fail when the loader opens it, so keeping one is refused unless asked for.
 UNREADABLE = (
     "data_file_missing",
     "episode_unreadable",
@@ -69,32 +65,9 @@ def first_firing(record: dict[str, Any], rules: list[str]) -> dict[str, Any] | N
     return None
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--root", required=True)
-    parser.add_argument("--validation", required=True)
-    parser.add_argument("--out", required=True)
-    parser.add_argument("--drop", action="append", default=[],
-                        help="a defect name that removes an episode")
-    parser.add_argument("--rules-file", help="a file of defect names, one per line")
-    parser.add_argument("--keep-unreadable", action="store_true",
-                        help="keep episodes with no bytes to read, having given "
-                             "them a trajectory weight of zero")
-    args = parser.parse_args(argv)
-
-    logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
-    root = stage.resolve_root(args.root)
-    validation_path = stage.under_root(root, args.validation)
-    out = stage.under_root(root, args.out)
-
-    _, records = stage.read_jsonl(validation_path)
-    directories = sorted({record["dataset"] for record in records})
-    stage.refuse_write_into_input(out, [root / name for name in directories])
-    rules = read_rules(
-        args.drop,
-        stage.under_root(root, args.rules_file) if args.rules_file else None,
-    )
-
+def filter_records(records: list[dict[str, Any]], rules: list[str]
+                   ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Validation records -> kept and dropped records, and what the kept set carries."""
     out_records: list[dict[str, Any]] = []
     reasons: Counter = Counter()
     position: Counter = Counter()
@@ -115,9 +88,6 @@ def main(argv: list[str] | None = None) -> int:
                 "extrinsics": record["extrinsics"],
                 "defects": [defect["name"] for defect in record["defects"]],
             })
-            # What the kept set carries, counted here rather than left for a
-            # reader of the corpus: a kept episode that validation marked
-            # failed is a decision, and a decision nobody states is a defect.
             if not record["pass"]:
                 failing += 1
             for defect in {defect["name"] for defect in record["defects"]}:
@@ -147,49 +117,56 @@ def main(argv: list[str] | None = None) -> int:
     kept = sum(1 for record in out_records if record["kind"] == "kept")
     dropped = len(out_records) - kept
     if kept + dropped != len(records):
-        raise AssertionError(
-            f"kept {kept} plus dropped {dropped} is not {len(records)} validated\n"
-            f"expected one output record per validation record\n"
-            f"this is a defect in filter_episodes, not in the corpus"
-        )
+        raise AssertionError(f"kept {kept} plus dropped {dropped} is not {len(records)} validated")
+    summary = {"validated": len(records), "kept": kept, "dropped": dropped,
+               "dropped_by_rule": dict(sorted(reasons.items())),
+               "kept_failing_validation": failing,
+               "kept_with_defect": dict(sorted(carried.items())),
+               "kept_unreadable": unreadable}
+    return out_records, summary
 
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--root", required=True)
+    parser.add_argument("--validation", required=True, help="validate_episodes.py output")
+    parser.add_argument("--out", required=True, help="new JSONL output")
+    parser.add_argument("--drop", action="append", default=[],
+                        help="a defect name that removes an episode")
+    parser.add_argument("--rules-file", help="a file of defect names, one per line")
+    parser.add_argument("--keep-unreadable", action="store_true",
+                        help="keep episodes with no bytes to read (listed in the header)")
+    args = parser.parse_args(argv)
+
+    root = common.resolve_root(args.root)
+    validation_path = common.cli_path(args.validation)
+    rules_path = common.cli_path(args.rules_file) if args.rules_file else None
+    _, records = common.read_jsonl(validation_path)
+    directories = sorted({record["dataset"] for record in records})
+    out = common.new_output(args.out, [root / name for name in directories])
+    rules = read_rules(args.drop, rules_path)
+
+    out_records, summary = filter_records(records, rules)
+    unreadable = summary["kept_unreadable"]
     if unreadable and not args.keep_unreadable:
         listed = "\n".join(
             f"  {item['dataset']} episode {item['episode']} at kept position "
             f"{item['kept_position']}: {', '.join(item['defects'])}"
-            for item in unreadable[:LISTED_UNREADABLE]
-        )
-        raise ValueError(
-            f"{len(unreadable)} kept episodes have no bytes to read:\n{listed}\n"
-            f"expected every kept episode to be readable, since the loader raises "
-            f"on one that is not and the raise ends the run\n"
-            f"name the defect in --drop, or pass --keep-unreadable and give those "
-            f"directories a trajectory weight of zero at the positions above"
-        )
+            for item in unreadable[:LISTED_UNREADABLE])
+        raise ValueError(f"{len(unreadable)} kept episodes have no bytes to read:\n{listed}\n"
+                         "name the defect in --drop, or pass --keep-unreadable")
 
-    head = stage.header(
-        "filter_episodes",
-        root=root,
-        inputs={"validation": validation_path},
-        tree=REPO,
-        extra={"rules": rules,
-               "keep_unreadable": bool(args.keep_unreadable),
-               "kept_failing_validation": failing,
-               "kept_with_defect": dict(sorted(carried.items())),
-               "kept_unreadable": unreadable},
-    )
-    written = stage.write_jsonl(out, head, out_records)
-    logger.info("%d validated, %d kept, %d dropped", len(records), kept, dropped)
-    for name, count in sorted(reasons.items()):
-        logger.info("rule %s dropped %d", name, count)
-    logger.info("%d kept episodes validation marked failed", failing)
-    for name, count in sorted(carried.items()):
-        logger.info("kept carrying defect %s: %d", name, count)
-    for item in unreadable:
-        logger.warning("kept with nothing to read: %s episode %d at kept position %d, %s",
-                       item["dataset"], item["episode"], item["kept_position"],
-                       ", ".join(item["defects"]))
-    logger.info("%s %s", "wrote" if written else "unchanged", out)
+    inputs = [common.display(root, validation_path)]
+    if rules_path is not None:
+        inputs.append(common.display(root, rules_path))
+    head = common.header("filter_episodes", inputs=inputs,
+                         settings={"rules": rules, "keep_unreadable": bool(args.keep_unreadable),
+                                   **summary})
+    common.write_jsonl(out, head, out_records)
+    print(f"{summary['validated']} validated, {summary['kept']} kept, "
+          f"{summary['dropped']} dropped; wrote {out}")
+    for name, count in summary["dropped_by_rule"].items():
+        print(f"  {name}: {count}")
     return 0
 
 

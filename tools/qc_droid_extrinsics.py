@@ -1,24 +1,23 @@
-"""Stage 7c: whether DROID's stored pose describes the camera the frames show.
+"""Rule 5 (pose): score whether DROID's stored exterior-camera pose describes its frames.
 
-No labels and no detector. The arm is the only moving thing in a DROID scene,
-so a right pose puts the projected gripper on moving pixels and a stale one
-leaves it on static background. The score is the motion energy at the projected
-points over the motion energy of the whole frame.
+The same motion-energy score as qc_extrinsics.py: the gripper links, placed
+from the recorded flange pose and gripper opening through a Franka Panda URDF,
+are projected with the stored pose and intrinsics; the score is the mean
+motion energy at the projected points over the mean motion energy of the
+frame, ok at 2.5 or above, fail below, inconclusive under 30 samples. With
+--control each episode is also scored under a pose recorded in another lab.
 
-One record per episode and its stored exterior camera: the score, the samples
-behind it and a verdict of ok, fail or inconclusive. With --control the episode
-is scored again under a pose recorded in another lab, which reads as wrong.
+The URDF is third-party and supplied by the user under its own licence.
 
 Usage:
-    python tools/qc_droid_extrinsics.py --root /corpus --control \
-        --calib calib/droid_extrinsics --dirs-file config/droid_dirs.txt \
-        --urdf <a Franka Panda URDF you supply> --out metadata/C/qc_droid.jsonl
+    python tools/qc_droid_extrinsics.py --root $NEO_VLA_DATA_ROOT --control \
+        --calib <DROID pose tree> --dirs-file droid_dirs.txt \
+        --urdf <Franka Panda URDF> --out filtered/qc_droid.jsonl --workers 32
 """
 from __future__ import annotations
 
 import argparse
 import json
-import logging
 import math
 import sys
 import xml.etree.ElementTree as elementtree
@@ -28,26 +27,19 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import cv2
+import filter_common as common
 import numpy as np
 import pyarrow.parquet as parquet
-import stage
-from scan_source import directory_inputs, episode_files, read_dir_list
 from scipy.spatial.transform import Rotation
 
-logger = logging.getLogger("qc_droid_extrinsics")
-
-REPO = Path(__file__).resolve().parent.parent
-
-# The kit this is ported from measured motion on a 640x360 map made from
-# DROID's own 1280x720 stream. Our copy stores one 256x256 frame per row, so
-# both of the kit's pixel constants are rescaled to the raster they land on
-# rather than carried across as numbers.
-KIT_MOTION_WIDTH = 640.0
-KIT_MOTION_HEIGHT = 360.0
-KIT_NATIVE_WIDTH = 1280.0
-KIT_NATIVE_HEIGHT = 720.0
-KIT_BLUR_SIGMA = 5.0
-KIT_MIN_UV_SPEED = 1.5
+# The blur width is defined on a 640x360 motion map and the speed floor on the
+# native 1280x720 stream; both are rescaled to the stored frame size.
+REFERENCE_MOTION_WIDTH = 640.0
+REFERENCE_MOTION_HEIGHT = 360.0
+REFERENCE_NATIVE_WIDTH = 1280.0
+REFERENCE_NATIVE_HEIGHT = 720.0
+BLUR_SIGMA = 5.0
+MIN_UV_SPEED = 1.5
 
 # Below this mean absolute difference a frame holds no motion, and dividing the
 # joint energy by it would report the ratio of two kinds of noise.
@@ -57,7 +49,7 @@ STATIC_FRAME_ENERGY = 0.2
 # score but no reading at all: the arm was still, or out of view.
 MIN_SAMPLES = 30
 
-# Where the kit puts the line. A pose that describes the camera scores well
+# A pose that describes the camera scores well
 # above one and a pose that does not scores near it, so anything in this
 # region is a wide gap rather than a tuned edge.
 SCORE_THRESHOLD = 2.5
@@ -65,10 +57,8 @@ SCORE_THRESHOLD = 2.5
 # How many stored frames the difference is taken across.
 STRIDE = 2
 
-# The points the score is sampled at. The kit samples the forearm and the
-# fingers because base joints barely move; our copy publishes no joint angles,
-# so the arm cannot be reconstructed above the wrist and these are the links
-# the flange pose alone places. They are the fastest-moving ones either way.
+# The points the score is sampled at: the hand links the flange pose places
+# without joint angles, which are also the fastest-moving links.
 HAND_LINKS = ("panda_hand", "panda_hand_tcp", "panda_leftfinger",
               "panda_rightfinger", "panda_leftfingertip", "panda_rightfingertip")
 
@@ -77,14 +67,11 @@ HAND_LINKS = ("panda_hand", "panda_hand_tcp", "panda_leftfinger",
 # pose as the tool centre instead puts them a hand's length back up the wrist.
 FLANGE_LINK = "panda_link8"
 
-# The widest the fingers open, in metres, and the gripper reading that means
-# open. The kit drives the two finger joints from the same pair.
+# The widest the fingers open, in metres.
 FINGER_TRAVEL = 0.04
 
-# Where in the stored state vector the flange pose and the gripper sit. The
-# first six are DROID's cartesian_position verbatim, in metres and radians
-# about fixed axes, which the pose sidecar states and validated against the
-# vendor's own trajectory file.
+# Where in the stored state the flange pose (DROID cartesian_position: metres
+# and fixed-axis radians) and the gripper sit.
 POSE_COLUMNS = slice(0, 6)
 GRIPPER_COLUMN = 6
 
@@ -93,9 +80,7 @@ GRIPPER_COLUMN = 6
 STORED_VIEW = "observation.images.image"
 EXTERIOR_ROLES = ("ext1", "ext2")
 
-# Sources that publish a pose the vendor measured. Everything else is an
-# estimate or nothing, and neither is scored here: an estimate is refused by
-# the build stage before it can reach a token.
+# Pose sources that are vendor measurements; estimated poses are not scored.
 VENDOR_SOURCES = ("droid_metadata_json", "karlp_verified_gt")
 
 VERDICTS = ("ok", "fail", "inconclusive")
@@ -185,14 +170,11 @@ def qc_camera(
     frames: list[np.ndarray], uv_all: np.ndarray, ok_all: np.ndarray, stride: int,
     *, size: tuple[int, int], sigma: float, min_uv_speed: float,
 ) -> tuple[float | None, int, int]:
-    """The kit's score for one camera: joint motion energy over frame energy.
+    """The score for one camera: motion energy at the points over frame energy.
 
-    Three things differ from the kit and nothing else does. The frames arrive
-    as encoded bytes because our copy stores a picture per row and has no video
-    file to open. The motion map is the stored raster rather than half of it,
-    since 256 pixels do not survive another halving, so the projected points
-    index it directly. The blur width and the speed floor are passed in, having
-    been rescaled from the raster the kit measured them on.
+    Frames are the encoded images stored per row. The motion map is the stored
+    raster, indexed directly by the projected points; the blur width and speed
+    floor are passed in already rescaled to it (scaled_constants).
     """
     width, height = size
     previous = None
@@ -234,17 +216,17 @@ def verdict_of(score: float | None, threshold: float) -> str:
 
 
 def scaled_constants(size: tuple[int, int]) -> tuple[float, float]:
-    """The kit's blur width and speed floor, rescaled to our stored raster.
+    """The blur width and speed floor, rescaled to the stored raster.
 
     Both are lengths in pixels, so each is scaled by the geometric mean of the
     two axis ratios: the stored frame is a squashed 16:9 view and a single
     ratio would be wrong on one axis.
     """
     width, height = size
-    blur = KIT_BLUR_SIGMA * math.sqrt(
-        (width / KIT_MOTION_WIDTH) * (height / KIT_MOTION_HEIGHT))
-    speed = KIT_MIN_UV_SPEED * math.sqrt(
-        (width / KIT_NATIVE_WIDTH) * (height / KIT_NATIVE_HEIGHT))
+    blur = BLUR_SIGMA * math.sqrt(
+        (width / REFERENCE_MOTION_WIDTH) * (height / REFERENCE_MOTION_HEIGHT))
+    speed = MIN_UV_SPEED * math.sqrt(
+        (width / REFERENCE_NATIVE_WIDTH) * (height / REFERENCE_NATIVE_HEIGHT))
     return blur, speed
 
 
@@ -272,7 +254,7 @@ def calibration_of(record: dict[str, Any], size: tuple[int, int]) -> dict[str, A
             f"calibration is for {stored['width']}x{stored['height']}, "
             f"frames are {size[0]}x{size[1]}\n"
             f"expected a calibration measured against the stored frames\n"
-            f"rebuild the pose sidecar against this copy of the corpus"
+            f"use calibrations measured on the stored frames"
         )
     return stored
 
@@ -288,9 +270,9 @@ def work_items(
     """
     items: list[dict[str, Any]] = []
     for directory in directories:
-        name = stage.relative(root, directory)
+        name = common.relative(root, directory)
         size = stored_size(directory)
-        parquets = episode_files(directory, "data", ".parquet")
+        parquets = common.episode_files(directory, "data", ".parquet")
         episodes = {}
         with open(directory / "meta" / "episodes.jsonl", encoding="utf-8") as handle:
             for line in handle:
@@ -305,7 +287,7 @@ def work_items(
                     f"{name} episode {index} has {rows} rows, sidecar says "
                     f"{record['n_frames']}\n"
                     f"expected the two to agree, which is what confirms the join\n"
-                    f"rebuild the sidecar from the matching source recording"
+                    f"check that the pose tree belongs to these directories"
                 )
             if record["calib_source"] not in VENDOR_SOURCES:
                 continue
@@ -420,29 +402,26 @@ def distribution(scores: list[float]) -> dict[str, float]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--root", required=True, help="the one corpus root")
+    parser.add_argument("--root", required=True, help="the data root")
     parser.add_argument("--calib", required=True,
-                        help="the pose tree, one directory per shard, under the root")
+                        help="the pose tree, one directory per shard")
     parser.add_argument("--dir", action="append", default=[], help="a directory to read")
     parser.add_argument("--dirs-file", help="a file of directories, one per line")
     parser.add_argument("--urdf", required=True, help="the arm model the points come from")
-    parser.add_argument("--out", required=True, help="where the scores go")
+    parser.add_argument("--out", required=True, help="new JSONL output")
     parser.add_argument("--control", action="store_true",
                         help="also score each episode under another lab's pose")
     parser.add_argument("--sample", type=int, default=0,
-                        help="score this many episodes, spread evenly over the shards")
+                        help="score this many episodes, spread evenly; 0 scores all")
     parser.add_argument("--workers", type=int, default=1)
-    parser.add_argument("--threshold", type=float, default=SCORE_THRESHOLD)
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
-    root = stage.resolve_root(args.root)
-    dirs_file = stage.under_root(root, args.dirs_file) if args.dirs_file else None
-    directories = read_dir_list(root, args.dir, dirs_file)
-    calib = stage.under_root(root, args.calib)
+    root = common.resolve_root(args.root)
+    dirs_file = common.cli_path(args.dirs_file) if args.dirs_file else None
+    directories = common.read_dir_list(root, args.dir, dirs_file)
+    calib = common.cli_path(args.calib)
     urdf = Path(args.urdf).resolve()
-    out = stage.under_root(root, args.out)
-    stage.refuse_write_into_input(out, [*directories, calib])
+    out = common.new_output(args.out, [*directories, calib])
 
     items = work_items(root, directories, calib, urdf, args.sample)
     if args.control:
@@ -457,29 +436,27 @@ def main(argv: list[str] | None = None) -> int:
     measured = [record["score"] for record in records if record["score"] is not None]
     controls = [record["control_score"] for record in records
                 if record["control_score"] is not None]
-    head = stage.header(
+    head = common.header(
         "qc_droid_extrinsics",
-        root=root,
-        inputs={**directory_inputs(root, directories, dirs_file),
-                stage.relative(root, calib): calib},
-        tree=REPO,
-        extra={"directories": len(directories), "episodes": len(records),
-               "threshold": args.threshold, "stride": STRIDE,
-               "min_samples": MIN_SAMPLES, "blur_sigma_and_speed_are_rescaled": True,
-               "urdf": str(urdf),
-               "verdicts": dict(sorted(counts.items())),
-               "control_verdicts": dict(sorted(control_counts.items())),
-               "score_percentiles": distribution(measured),
-               "control_percentiles": distribution(controls)},
+        inputs=[*(common.relative(root, path) for path in directories),
+                common.display(root, calib)],
+        settings={"directories": len(directories), "episodes": len(records),
+                  "sample": args.sample, "threshold": SCORE_THRESHOLD, "stride": STRIDE,
+                  "min_samples": MIN_SAMPLES, "blur_sigma_and_speed_are_rescaled": True,
+                  "urdf": str(urdf),
+                  "verdicts": dict(sorted(counts.items())),
+                  "control_verdicts": dict(sorted(control_counts.items())),
+                  "score_percentiles": distribution(measured),
+                  "control_percentiles": distribution(controls)},
     )
-    written = stage.write_jsonl(out, head, records)
-    logger.info("%d episodes scored over %d directories", len(records), len(directories))
+    common.write_jsonl(out, head, records)
+    print(f"{len(records)} episodes scored over {len(directories)} directories")
     for verdict in VERDICTS:
-        logger.info("%s %d", verdict, counts[verdict])
+        print(f"  {verdict}: {counts[verdict]}")
     if controls:
-        logger.info("control median %.2f against measured median %.2f",
-                    float(np.median(controls)), float(np.median(measured)))
-    logger.info("%s %s", "wrote" if written else "unchanged", out)
+        print(f"  control median {float(np.median(controls)):.2f}, "
+              f"measured median {float(np.median(measured)):.2f}")
+    print(f"wrote {out}")
     return 0
 
 
