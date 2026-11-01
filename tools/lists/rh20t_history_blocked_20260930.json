@@ -1,0 +1,198 @@
+{
+ "episodes": [
+  {
+   "dir": "rh20t_grid_k06_bync_e3w0x0u0",
+   "episode_index": 798,
+   "pose_same": 0.923077,
+   "robot": "ur5"
+  },
+  {
+   "dir": "rh20t_grid_k06_bysa_e2w1x0u0",
+   "episode_index": 161,
+   "pose_same": 0.9375,
+   "robot": "ur5"
+  },
+  {
+   "dir": "rh20t_grid_k08_bysa_e3w0x0u0",
+   "episode_index": 57,
+   "pose_same": 1.0,
+   "robot": "ur5"
+  },
+  {
+   "dir": "rh20t_grid_k09_bysa_e2w1x0u0",
+   "episode_index": 20,
+   "pose_same": 1.0,
+   "robot": "ur5"
+  },
+  {
+   "dir": "rh20t_grid_k09_bysa_e3w0x0u0",
+   "episode_index": 773,
+   "pose_same": 1.0,
+   "robot": "ur5"
+  },
+  {
+   "dir": "rh20t_grid_k10_bync_e1w0x2u0",
+   "episode_index": 117,
+   "pose_same": 0.935484,
+   "robot": "flexiv"
+  },
+  {
+   "dir": "rh20t_grid_k10_bync_e2w0x0u0",
+   "episode_index": 1224,
+   "pose_same": 0.912134,
+   "robot": "flexiv"
+  },
+  {
+   "dir": "rh20t_grid_k10_bync_e2w1x0u0",
+   "episode_index": 1,
+   "pose_same": 0.946488,
+   "robot": "flexiv"
+  },
+  {
+   "dir": "rh20t_grid_k10_bync_e2w1x0u0",
+   "episode_index": 7,
+   "pose_same": 0.972318,
+   "robot": "flexiv"
+  },
+  {
+   "dir": "rh20t_grid_k10_bync_e2w1x0u0",
+   "episode_index": 18,
+   "pose_same": 0.964758,
+   "robot": "flexiv"
+  },
+  {
+   "dir": "rh20t_grid_k10_bync_e3w0x0u0",
+   "episode_index": 171,
+   "pose_same": 0.946309,
+   "robot": "flexiv"
+  },
+  {
+   "dir": "rh20t_grid_k10_bync_e3w0x0u0",
+   "episode_index": 415,
+   "pose_same": 0.965636,
+   "robot": "flexiv"
+  },
+  {
+   "dir": "rh20t_grid_k10_bync_e3w0x0u0",
+   "episode_index": 1141,
+   "pose_same": 0.923077,
+   "robot": "flexiv"
+  },
+  {
+   "dir": "rh20t_grid_k10_bync_e3w0x0u0",
+   "episode_index": 1316,
+   "pose_same": 0.927966,
+   "robot": "flexiv"
+  },
+  {
+   "dir": "rh20t_grid_k10_bysa_e2w0x0u0",
+   "episode_index": 864,
+   "pose_same": 0.956522,
+   "robot": "flexiv"
+  },
+  {
+   "dir": "rh20t_grid_k10_bysa_e2w0x0u0",
+   "episode_index": 865,
+   "pose_same": 1.0,
+   "robot": "flexiv"
+  },
+  {
+   "dir": "rh20t_grid_k10_bysa_e3w0x0u0",
+   "episode_index": 691,
+   "pose_same": 1.0,
+   "robot": "flexiv"
+  },
+  {
+   "dir": "rh20t_grid_k10_bysa_e3w0x0u0",
+   "episode_index": 761,
+   "pose_same": 0.960526,
+   "robot": "flexiv"
+  },
+  {
+   "dir": "rh20t_grid_k10_bysa_e3w0x0u0",
+   "episode_index": 803,
+   "pose_same": 0.956522,
+   "robot": "flexiv"
+  },
+  {
+   "dir": "rh20t_grid_k10_bysa_e3w0x0u0",
+   "episode_index": 967,
+   "pose_same": 0.957143,
+   "robot": "flexiv"
+  },
+  {
+   "dir": "rh20t_grid_k12_bysa_e2w0x0u0",
+   "episode_index": 62,
+   "pose_same": 1.0,
+   "robot": "ur5"
+  },
+  {
+   "dir": "rh20t_grid_k12_bysa_e2w1x0u0",
+   "episode_index": 44,
+   "pose_same": 0.952239,
+   "robot": "flexiv"
+  },
+  {
+   "dir": "rh20t_grid_k13_bync_e2w0x0u0",
+   "episode_index": 300,
+   "pose_same": 0.97136,
+   "robot": "flexiv"
+  },
+  {
+   "dir": "rh20t_grid_k13_bync_e2w0x0u0",
+   "episode_index": 461,
+   "pose_same": 0.960808,
+   "robot": "franka"
+  },
+  {
+   "dir": "rh20t_grid_k13_bync_e2w1x0u0",
+   "episode_index": 229,
+   "pose_same": 0.948805,
+   "robot": "franka"
+  },
+  {
+   "dir": "rh20t_grid_k13_bysa_e2w0x0u0",
+   "episode_index": 157,
+   "pose_same": 0.923423,
+   "robot": "flexiv"
+  },
+  {
+   "dir": "rh20t_grid_k13_bysa_e3w0x0u0",
+   "episode_index": 779,
+   "pose_same": 0.990408,
+   "robot": "flexiv"
+  },
+  {
+   "dir": "rh20t_grid_k14_bync_e0w1x0u0",
+   "episode_index": 0,
+   "pose_same": 0.986667,
+   "robot": "flexiv"
+  },
+  {
+   "dir": "rh20t_grid_k14_bync_e2w0x0u0",
+   "episode_index": 20,
+   "pose_same": 0.959778,
+   "robot": "flexiv"
+  },
+  {
+   "dir": "rh20t_grid_k14_bync_e2w1x0u0",
+   "episode_index": 7,
+   "pose_same": 0.958275,
+   "robot": "flexiv"
+  },
+  {
+   "dir": "rh20t_grid_k14_bync_e2w1x0u0",
+   "episode_index": 46,
+   "pose_same": 0.955338,
+   "robot": "franka"
+  }
+ ],
+ "header": {
+  "count": 31,
+  "episode_index": "meta/episodes.jsonl episode_index (arrow episode_index at episode_starts[k])",
+  "episodes_scanned": 32323,
+  "rule": "RH20T episode whose position + quaternion is bit-identical between consecutive rows on >= 90% of steps (pose_same >= 0.9) takes the no-history form",
+  "source_sha256": "5da185723504bf152f1e13d79492d51b0514523f3f898b064d0c1b571f2f7770"
+ },
+ "schema": "neo_vla_history_blocked_v1"
+}

@@ -1,0 +1,47 @@
+[
+  {
+    "upstream_repo": "agibot-world/AgiBotWorld-Beta",
+    "observed_revision": "2252b3fdc88dc67fa5d5e4b771e1b86f5e71c278",
+    "license_metadata": null,
+    "url": "https://huggingface.co/datasets/agibot-world/AgiBotWorld-Beta",
+    "checked_at": "2026-11-01",
+    "approved_for_upload": false,
+    "status": "license terms identified; exact processed-source revision and conditions still to be matched"
+  },
+  {
+    "upstream_repo": "allenai/MolmoAct2-BimanualYAM-Dataset",
+    "observed_revision": "e9f21ae15074330839f2ac25ed4b49d76dfa1f9c",
+    "license_metadata": "apache-2.0",
+    "url": "https://huggingface.co/datasets/allenai/MolmoAct2-BimanualYAM-Dataset",
+    "checked_at": "2026-11-01",
+    "approved_for_upload": false,
+    "status": "license terms identified; exact processed-source revision and conditions still to be matched"
+  },
+  {
+    "upstream_repo": "OpenGalaxea/Galaxea-Open-World-Dataset",
+    "observed_revision": "df670d8dc3f2b369f55d28a3428b8639f0dab37d",
+    "license_metadata": "cc-by-nc-sa-4.0",
+    "url": "https://huggingface.co/datasets/OpenGalaxea/Galaxea-Open-World-Dataset",
+    "checked_at": "2026-11-01",
+    "approved_for_upload": false,
+    "status": "license terms identified; exact processed-source revision and conditions still to be matched"
+  },
+  {
+    "upstream_repo": "InternRobotics/InternData-A1",
+    "observed_revision": "56450d831fff01a9091ccde5a8b68c103a775a60",
+    "license_metadata": null,
+    "url": "https://huggingface.co/datasets/InternRobotics/InternData-A1",
+    "checked_at": "2026-11-01",
+    "approved_for_upload": false,
+    "status": "license terms identified; exact processed-source revision and conditions still to be matched"
+  },
+  {
+    "upstream_repo": "x-humanoid-robomind/RoboMIND",
+    "observed_revision": "e7ffe31d1fe983a42c3d7b79d192f554fc05b86e",
+    "license_metadata": "apache-2.0",
+    "url": "https://huggingface.co/datasets/x-humanoid-robomind/RoboMIND",
+    "checked_at": "2026-11-01",
+    "approved_for_upload": false,
+    "status": "license terms identified; exact processed-source revision and conditions still to be matched"
+  }
+]

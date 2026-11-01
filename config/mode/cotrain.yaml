@@ -1,0 +1,11 @@
+# @package model
+# full_ft plus vision-language batches mixed in, which keeps the backbone's
+# language ability. Co-train batches render plain chat with no robot tokens.
+#
+# The chat loss weight is the data group's (stage 2 0.2222 on its chat steps,
+# every other step; post-train 0.1) with no default here: a co-train launch on
+# a group that states none fails to resolve.
+
+trainable: full_ft
+cotrain:
+  weight: ${data.cotrain_weight}

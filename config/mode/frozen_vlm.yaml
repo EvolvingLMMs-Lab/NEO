@@ -1,0 +1,7 @@
+# @package model
+# The backbone is held fixed; the conditioning tokenizers and the action
+# expert train. Freezing sets requires_grad=False on the backbone parameters.
+# It does not wrap the encoder in no_grad, which would also cut the gradient
+# to the tokenizers.
+
+trainable: frozen_vlm

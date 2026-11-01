@@ -1,0 +1,354 @@
+"""What every data-preparation stage shares: the root, the header, the refusal.
+
+One root. Every path a stage writes is stated relative to it, so moving the
+corpus changes one environment variable and nothing else. Every stage output
+carries a provenance header (stage.header), and the hashes
+in it are what make a stale output visible to the verify stage.
+
+Writing is idempotent by comparison, not by luck: a stage serialises its
+payload without the timestamp, compares that with what is already on disk, and
+leaves the file untouched when the two agree. So re-running a stage on
+unchanged inputs leaves byte-identical output and a changed input is the only
+thing that moves the file.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import subprocess
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Iterable, Sequence
+
+# The layout of the stage outputs in this module's format. Bumped when a field
+# moves; the verify stage refuses a version it does not know.
+SCHEMA_VERSION = 1
+
+# The version every stage output states. 2.0.0 is the v7 layout (joints, hand
+# and body; manifest schema 3; embodiments v2): a header another version wrote
+# is stale, so every output built under v6 (1.1.0) is redone, and the stage-1
+# sidecars and the loader that reads them hold this same version.
+TOOL_VERSION = "2.0.0"
+
+# What hides a provenance header from a reader of a plain text listing. The
+# stages that read a directory list already skip a line starting with it, so a
+# listing carries the same header the json outputs do without changing them.
+LISTING_COMMENT = "# "
+
+# Bytes read at a time when hashing. Large enough that a 137 MB sidecar is one
+# pass over the page cache rather than a million syscalls.
+HASH_BLOCK = 1 << 20
+
+# A LIBERO-family directory: its source or name begins with one of these
+# (config/layouts/libero_v7.json gives libero/, libero_nom/ and the tpr6 legs
+# source 'libero'). Its state position is world-frame, so every arm states the
+# per-episode base offset the loader subtracts (LIBERO F3): build_manifest
+# refuses to write one without, and verify_corpus check (x) refuses a manifest
+# that holds one without.
+LIBERO_FAMILY = ("libero",)
+
+
+def is_libero_family(entry: dict[str, Any]) -> bool:
+    """Whether a manifest entry (or any mapping with source and name) is LIBERO's."""
+    return any(str(entry.get(field, "")).startswith(word)
+               for field in ("source", "name") for word in LIBERO_FAMILY)
+
+
+def git_commit(tree: Path) -> str:
+    """The commit the tree is at, or "dirty" when no commit names it.
+
+    "dirty" covers both an edited checkout and a directory that is not one:
+    in either case there is no commit that reproduces what ran.
+    """
+    try:
+        head = subprocess.run(
+            ["git", "-C", str(tree), "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=False,
+        )
+    except FileNotFoundError:
+        return "dirty"
+    if head.returncode != 0:
+        return "dirty"
+    status = subprocess.run(
+        ["git", "-C", str(tree), "status", "--porcelain"],
+        capture_output=True, text=True, check=False,
+    )
+    if status.returncode != 0 or status.stdout.strip():
+        return "dirty"
+    return head.stdout.strip()
+
+
+def sha256_of(path: Path) -> str:
+    """The hash of one file, as the provenance header records it."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(HASH_BLOCK), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def sha256_of_tree(path: Path) -> str:
+    """The hash of a directory: its root-relative file names and their bytes.
+
+    A directory input is hashed as a whole so that adding a file to it changes
+    the header, which a per-file hash of a listing taken earlier would not.
+    """
+    digest = hashlib.sha256()
+    for found in sorted(p for p in path.rglob("*") if p.is_file()):
+        digest.update(str(found.relative_to(path)).encode("utf-8"))
+        digest.update(sha256_of(found).encode("ascii"))
+    return digest.hexdigest()
+
+
+def sha256_of_source(tree: Path) -> str:
+    """The hash of a working tree's source, for a tree no commit names.
+
+    Hidden entries and compiled bytecode are left out. A checkout's index and
+    its .pyc files move when the source has not, and this hash answers only
+    whether the source has, so that "dirty" can still be told apart from
+    "dirty and edited since".
+    """
+    digest = hashlib.sha256()
+    for found in sorted(_source_files(tree)):
+        digest.update(str(found.relative_to(tree)).encode("utf-8"))
+        digest.update(sha256_of(found).encode("ascii"))
+    return digest.hexdigest()
+
+
+def _source_files(tree: Path) -> Iterable[Path]:
+    for found in tree.rglob("*"):
+        parts = found.relative_to(tree).parts
+        if any(part.startswith(".") or part == "__pycache__" for part in parts):
+            continue
+        if found.is_file():
+            yield found
+
+
+def resolve_root(root: str | os.PathLike) -> Path:
+    """The corpus root as an absolute path, refusing one that does not exist."""
+    resolved = Path(root).expanduser().resolve()
+    if not resolved.is_dir():
+        raise FileNotFoundError(
+            f"root {resolved} is not a directory\n"
+            f"expected the corpus root holding the source trees\n"
+            f"pass --root to the directory the manifest's paths hang off"
+        )
+    return resolved
+
+
+def under_root(root: Path, path: str | os.PathLike) -> Path:
+    """A root-relative or absolute path -> the absolute path, checked.
+
+    Symbolic links are not followed here. A corpus is normally staged as a tree
+    of links into the trees it was downloaded to, and following them would put
+    every directory outside the root it was staged under.
+    """
+    candidate = Path(path)
+    joined = Path(os.path.normpath(candidate if candidate.is_absolute() else root / candidate))
+    if not joined.is_relative_to(root):
+        raise ValueError(
+            f"path {joined} is outside the root\n"
+            f"expected a path under {root}\n"
+            f"move the file under the root or pass a different --root"
+        )
+    return joined
+
+
+def relative(root: Path, path: Path) -> str:
+    """An absolute path -> the string the stage output records for it."""
+    return str(Path(os.path.normpath(path)).relative_to(root))
+
+
+def refuse_write_into_input(out: Path, inputs: Iterable[Path]) -> None:
+    """Raise when the output would land inside a tree the stage reads.
+
+    The raw trees are read-only for this pipeline. A stage that writes into one
+    changes the thing its own hashes describe, and the next run's header would
+    disagree with the run that produced the data. Both sides are resolved
+    through their links here, so a staged tree cannot be written into by way of
+    the path it was downloaded to.
+    """
+    out_dir = out.resolve().parent
+    for source in inputs:
+        source_dir = Path(source).resolve()
+        if not source_dir.is_dir():
+            source_dir = source_dir.parent
+        if out_dir == source_dir or out_dir.is_relative_to(source_dir):
+            raise ValueError(
+                f"output {out} is inside input {source_dir}\n"
+                f"expected an output directory outside every input tree\n"
+                f"pass --out under a preparation directory of the root"
+            )
+
+
+def header(
+    tool: str,
+    *,
+    root: Path,
+    inputs: dict[str, Path],
+    tree: Path,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """The provenance header, with every input hashed and named by the root."""
+    hashes: dict[str, str] = {}
+    for path in sorted(inputs.values(), key=str):
+        key = relative(root, Path(path))
+        hashes[key] = sha256_of_tree(path) if Path(path).is_dir() else sha256_of(path)
+    record = {
+        "schema_version": SCHEMA_VERSION,
+        "tool": tool,
+        "tool_version": TOOL_VERSION,
+        "git_commit": git_commit(tree),
+        "inputs": hashes,
+        "created": None,
+    }
+    if extra:
+        record["settings"] = extra
+    return record
+
+
+def dumps_json(payload: Any) -> str:
+    """One serialisation for every stage, so two runs produce the same bytes."""
+    return json.dumps(payload, sort_keys=True, indent=1, ensure_ascii=True) + "\n"
+
+
+def dumps_line(payload: Any) -> str:
+    """One record of a jsonl stage output."""
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n"
+
+
+def _stamped(payload: dict[str, Any], provenance_key: str) -> dict[str, Any]:
+    stamped = dict(payload)
+    stamped[provenance_key] = dict(payload[provenance_key])
+    stamped[provenance_key]["created"] = datetime.now(timezone.utc).isoformat(
+        timespec="seconds"
+    )
+    return stamped
+
+
+def _unchanged(
+    path: Path, body: str, provenance_key: str, first_line_only: bool, prefix: str = ""
+) -> bool:
+    if not path.exists():
+        return False
+    text = path.read_text(encoding="utf-8")
+    try:
+        if first_line_only:
+            head, _, rest = text.partition("\n")
+            if not head.startswith(prefix):
+                return False
+            existing = json.loads(head[len(prefix):])
+            existing[provenance_key]["created"] = None
+            return prefix + dumps_line(existing) + rest == body
+        existing = json.loads(text)
+        existing[provenance_key]["created"] = None
+        return dumps_json(existing) == body
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return False
+
+
+def _write_atomic(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(text, encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def write_json(path: Path, payload: dict[str, Any], *, provenance_key: str = "provenance",
+               exclusive: bool = False) -> bool:
+    """Write one json stage output. False when the bytes on disk already match."""
+    body = dumps_json(payload)
+    if exclusive:
+        with path.open("x", encoding="utf-8") as stream:
+            stream.write(dumps_json(_stamped(payload, provenance_key)))
+        return True
+    if _unchanged(path, body, provenance_key, first_line_only=False):
+        return False
+    _write_atomic(path, dumps_json(_stamped(payload, provenance_key)))
+    return True
+
+
+def write_jsonl(path: Path, head: dict[str, Any], records: Sequence[Any], *,
+                exclusive: bool = False) -> bool:
+    """Write one jsonl stage output, header first. False when it already matches."""
+    tail = "".join(dumps_line(record) for record in records)
+    body = dumps_line({"provenance": head}) + tail
+    if exclusive:
+        with path.open("x", encoding="utf-8") as stream:
+            stream.write(dumps_line(_stamped({"provenance": head}, "provenance")) + tail)
+        return True
+    if _unchanged(path, body, "provenance", first_line_only=True):
+        return False
+    stamped = _stamped({"provenance": head}, "provenance")
+    _write_atomic(path, dumps_line(stamped) + tail)
+    return True
+
+
+def write_listing(path: Path, head: dict[str, Any], lines: Sequence[str]) -> bool:
+    """Write one text listing, header first. False when it already matches.
+
+    The listing a later stage takes as its directory list, so it is hashed as
+    that stage's input: it has to be byte-stable on unchanged input for the
+    same reason every other stage output is.
+    """
+    tail = "".join(f"{line}\n" for line in lines)
+    body = LISTING_COMMENT + dumps_line({"provenance": head}) + tail
+    if _unchanged(path, body, "provenance", True, LISTING_COMMENT):
+        return False
+    stamped = _stamped({"provenance": head}, "provenance")
+    _write_atomic(path, LISTING_COMMENT + dumps_line(stamped) + tail)
+    return True
+
+
+def read_jsonl(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """A jsonl stage output -> its header and its records, in file order."""
+    with open(path, encoding="utf-8") as handle:
+        first = handle.readline()
+        if not first:
+            raise ValueError(
+                f"{path} is empty\n"
+                f"expected a provenance header on line 1\n"
+                f"re-run the stage that writes it"
+            )
+        head = json.loads(first)["provenance"]
+        records = [json.loads(line) for line in handle if line.strip()]
+    return head, records
+
+
+def read_json(path: Path) -> dict[str, Any]:
+    """A json stage output, whole."""
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def check_inputs_match(head: dict[str, Any], root: Path) -> list[str]:
+    """Which of a header's recorded inputs no longer hash to what it recorded."""
+    stale = []
+    for name, recorded in sorted(head["inputs"].items()):
+        path = root / name
+        if not path.exists():
+            stale.append(f"{name}: missing")
+            continue
+        now = sha256_of_tree(path) if path.is_dir() else sha256_of(path)
+        if now != recorded:
+            stale.append(f"{name}: {recorded[:12]} recorded, {now[:12]} on disk")
+    return stale
+
+
+def check_artifacts_match(payload: dict[str, Any], root: Path) -> list[str]:
+    """Which of a stage output's own artifacts no longer hash to what it wrote.
+
+    The inputs half says the stage would reach the same answer again; this says
+    the answer is still on disk. A stage output that names no artifacts states
+    nothing about any file and returns nothing.
+    """
+    stale = []
+    for name, recorded in sorted(payload.get("artifacts", {}).items()):
+        path = root / name
+        if not path.exists():
+            stale.append(f"{name}: missing")
+            continue
+        now = sha256_of(path)
+        if now != recorded:
+            stale.append(f"{name}: {recorded[:12]} recorded, {now[:12]} on disk")
+    return stale

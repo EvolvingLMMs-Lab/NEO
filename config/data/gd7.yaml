@@ -1,0 +1,55 @@
+root: ${oc.env:NEO_VLA_DATA_ROOT}
+corpus: gd7_tokens_nobw
+manifest: ${data.root}/manifests/${data.corpus}.json
+fit_check: false
+# Whether a run of this group may add keys to its init checkpoint's (read at
+# trainer.init_from only). Stage 2 inherits this and trains stage 1's keys.
+new_keys: false
+
+train:
+  _target_: neo_vla.data.dataset.RobotDataset
+  manifest: ${data.manifest}
+  root: ${data.root}
+  max_grid: ${model.prefix.max_grid}      # checked against the manifest's canvas
+  pixels_per_token: 32                    # the vision tower re-checks this per batch
+  n_views: ${model.prefix.n_views}
+  n_slots: ${model.action.n_slots}
+  chunk: ${model.action.chunk}
+  action_dim: ${model.action.action_dim}  # 26, j7_dpos3_drot3_g1_h12
+  gripper_dims: ${model.action.gripper_dims}   # [13]
+  tokenizer_id: ${model.tokenizer_path}   # checked against the prompt stamp
+  max_text_tokens: ${model.prefix.max_text_tokens}
+  epoch_samples: 928972800                # 113,400 steps x 8,192, one pass, no index replayed
+  seed: ${seed}
+  sampling: rows                          # one pass laid out over the rows (above)
+  # The rule the manifest's weights must carry (above).
+  mixture:
+    exponent: 0.43
+    fixed:
+      interndata: 0.15
+    families:
+      agibot: [agibot]
+      droid3cam: [droid3cam]
+      oxe: [oxe]
+      rh20t: [rh20t]
+      interndata: [interndata_a1_franka_hand, interndata_a1_franka_robotiq, interndata_a1_genie1,
+                   interndata_a1_lift2, interndata_a1_split_aloha]
+      robocoin: [robocoin, robocoin_hands]
+      galaxea: [galaxea_owd]
+      bimanual_yam: [bimanual_yam]
+      robomind: [robomind, robomind_tienkung]
+  understanding: null
+  # The model's own key, not a second statement of it: under tokens the loader
+  # emits intrinsics [3, 6] and intrinsics_valid [3] for both view blocks, and it
+  # refuses a manifest stamped for another mode.
+  intrinsics_mode: ${model.prefix.intrinsics_mode}
+  # The model's pixel convention, which picks the resize filter; the runner
+  # holds the two against each other.
+  pixel_convention: ${model.vision.pixel_convention}
+  # The per-embodiment normaliser, beside the manifest it was measured on.
+  normaliser: ${data.root}/prep_${data.corpus}/embodiments.json
+  history_dropout: 0.1
+  state_noise:
+    sigma: 0.02          # position, aperture, joints, hand and body, in model-input units (y in [-1, 1])
+    rot_sigma_rad: 0.02  # rotation vector, radians, applied as Exp([dw]x) R
+    prob: 0.8            # on per sample, one switch for the arms and the body; each valid dim draws its own epsilon
