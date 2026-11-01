@@ -17,10 +17,8 @@
 
 <p align="center">
   <a href="https://weichenfan.github.io/NEO-VLA-Page/"><b>Project Page</b></a> ·
-  <a href="#method"><b>Method</b></a> ·
-  <a href="docs/training.md"><b>Training</b></a> ·
-  <a href="docs/preprocessing.md"><b>Data Filtering</b></a> ·
-  <a href="#citation"><b>Citation</b></a>
+  <b>HF Model — coming soon</b> ·
+  <a href="https://huggingface.co/datasets/weepiess2383/NEO-VLA-Action-Pretrain"><b>HF Data</b></a>
 </p>
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-7762b6.svg" alt="License: Apache 2.0"></a>
