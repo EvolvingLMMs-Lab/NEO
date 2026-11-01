@@ -252,10 +252,8 @@ class NeoVlaPolicy(nn.Module):
     # Rows that are not packed keep the robot half first. A class attribute
     # and no config key, read per micro-batch: the speed harness sets it on an
     # arm that isolates the order. CHAT_ORDER_LOG_LINE states it once.
-    # Off in the stage-2 recipe (measured): its gain is memory on
-    # the chat micro-batch, while the compiled robot path's peak is a
-    # robot-only micro-batch (12 of 40 layers recomputed), and it costs +1.09%
-    # a step; off, the pack runs after the robot rows, the bitwise path.
+    # Packed chat runs after the robot rows by default. Unpacked chat always
+    # runs after the robot rows.
     chat_pack_first = False
     chat_order_logged = False
 
@@ -536,7 +534,7 @@ class NeoVlaPolicy(nn.Module):
                 "the model's.\nDrop the data.train.pixel_convention override."
             )
         chat = dataset_field(dataset, "understanding")
-        # A post-train corpus (ShareGPT4VCoco) states no pack.
+        # The COCO ShareGPT corpus states no pack in both co-training stages.
         self.chat_pack = chat.pack if chat is not None and hasattr(chat, "pack") else None
         if chat is not None:
             from ..data.understanding import NATIVE_FORMAT

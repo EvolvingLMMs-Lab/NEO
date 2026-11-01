@@ -13,9 +13,7 @@ frame_set: {}
 frame_draw: episode
 pin_keeps_other_poses: false
 
-chat_root: ${oc.env:NEO_VLA_MTUND_ROOT}
-
-# flow loss + 0.1 x chat loss, every step.
+# flow loss + 0.1 x chat loss, every step: one COCO ShareGPT row per robot row.
 cotrain_weight: 0.1
 
 train:
@@ -43,24 +41,17 @@ train:
   history_dropout: 0.1
   state_noise: {sigma: 0.02, rot_sigma_rad: 0.02, prob: 0.8}   # as data/gd7.yaml
   understanding:
-    _target_: neo_vla.data.understanding.MtUnd
+    _target_: neo_vla.data.understanding.ShareGPT4VCoco
     chat_format: neo_native
-    registry: ${oc.env:NEO_VLA_MTUND_REGISTRY}
-    line_index: ${oc.env:NEO_VLA_MTUND_LINE_INDEX}   # tools/build_mtund_line_index.py over the registry
-    denylist: ${data.chat_root}/mt_und_denylist.json  # a json list of registry keys to skip; [] skips none
+    records: ${oc.env:NEO_VLA_COCOGPTSHARE_RECORDS}   # the ShareGPT4V-format json: a non-empty list of records
+    images: ${oc.env:NEO_VLA_COCOGPTSHARE_IMAGES}     # each record's image reference is joined onto this root
     tokenizer_path: ${model.tokenizer_path}
     min_pixels: 65536
     max_pixels: 1003520
-    max_tokens: 4096
+    max_tokens: 4096                          # a longer row is dropped, never cut
     pack_tokens: null                         # no pack: one chat row per robot row
     pack_micro_batches: null
-    pack_every_steps: null
     force_pack: null
     thinking_method: tag                      # as NEOpp-2B-SFT was trained
-    images_per_row: any
     pixel_convention: ${model.vision.pixel_convention}   # must be neo_native
-    draws: 163840000                          # the chat pool: index modulo draws seeds each chat row
     seed: ${seed}
-    object_store: require                     # 'exclude' drops registry entries whose images need the client
-    sdk_path: ${data.chat_root}/aoss-python-sdk-2.2.6
-    client_config: ${data.chat_root}/aoss.conf

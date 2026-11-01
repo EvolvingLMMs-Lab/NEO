@@ -1,0 +1,25 @@
+defaults:
+  - gd7
+  - _self_
+
+# flow loss + 0.1 x chat loss, every step: one COCO ShareGPT row per robot row.
+cotrain_weight: 0.1
+
+train:
+  epoch_samples: 614400000                  # 75,000 steps x 8,192 robot rows
+  sampling: rows                            # gd7's, stated
+  understanding:
+    _target_: neo_vla.data.understanding.ShareGPT4VCoco
+    chat_format: neo_native
+    records: ${oc.env:NEO_VLA_COCOGPTSHARE_RECORDS}   # the ShareGPT4V-format json: a non-empty list of records
+    images: ${oc.env:NEO_VLA_COCOGPTSHARE_IMAGES}     # each record's image reference is joined onto this root
+    tokenizer_path: ${model.tokenizer_path}   # NEOpp-2B-SFT's own
+    min_pixels: 65536
+    max_pixels: 1003520
+    max_tokens: 4096                          # a longer row is dropped, never cut
+    pack_tokens: null                         # no pack: one chat row per robot row
+    pack_micro_batches: null
+    force_pack: null
+    thinking_method: tag                      # as NEOpp-2B-SFT was trained
+    pixel_convention: ${model.vision.pixel_convention}   # must be neo_native
+    seed: ${seed}

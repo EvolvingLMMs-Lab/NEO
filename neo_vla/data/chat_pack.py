@@ -1,13 +1,8 @@
-"""The packed chat half of stage 2: the names the packing work codes against.
+"""Optional packed-chat interfaces shared by the loader and model.
 
-Stage 2 trains chat at NEO's own budget (max_pixels 16,777,216, max_tokens
-36,864) packed as NEO packs it, one pack of pack_tokens positions per
-micro-batch beside the robot rows, in NEO's own row format. This module holds
-the names, the config checks, the seeds of the row chain and the validator
-every pack is held to; a stated pack is read by the corpus, the loader and the
-model, and a stated relief flag by the encoder.
-
-With pack_tokens null nothing here changes a batch or a loss.
+The COCO ShareGPT recipes use unpacked rows. With pack_tokens null this module
+does not change a batch or loss. Custom packed corpora use these field names,
+configuration checks, row-chain seeds and validation helpers.
 """
 from __future__ import annotations
 
@@ -24,7 +19,7 @@ from .mixture import stream_seed
 # neo_vla/model/backbone/neo_llm.py IMG_CONTEXT_ID: importing neo_llm runs
 # neo_vla.model's __init__, whose encoder imports this module, so the shared
 # interface would import itself half-built. The data side imports no model
-# module; tests/data/test_chat_pack_interface.py holds the two values equal.
+# module. Keep this value aligned with the backbone constant.
 IMG_CONTEXT_ID = 151_669
 
 # The config keys. pack_tokens null is the unpacked loader: one chat row per
@@ -94,14 +89,14 @@ PACK_FIELDS = (PACK_IDS, PACK_LABELS, PACK_SEGMENTS, PACK_SEGMENT_TARGETS, PACK_
 PAD_SEGMENT = -1
 # understanding.IGNORE_INDEX, understanding.CHAT_PAD_ID and
 # understanding.NEO_TOKEN_PIXELS, restated so this module never imports the
-# corpus (which imports it); a test holds them equal.
+# corpus (which imports it).
 IGNORE_LABEL = -100
 PAD_ID = 0
 TOKEN_PIXELS = 32
 
 # What one pack counts, in this order: the rows it holds, their real tokens,
 # their images, the rows dropped over max_tokens while it was filled (the
-# understanding.MtUnd "too_long" skip), and the step's straddling row that no
+# corpus's "too_long" skip), and the step's straddling row that no
 # pack took (1 on the step's last pack, else 0). Fill is tokens over S, taken
 # when logged. The loop logs counter c as COUNTER_PREFIX + c, summed over a
 # log window and all-reduced on every rank.
@@ -119,8 +114,7 @@ COUNTER_PREFIX = "chat_pack_"
 # tokens, S = 36,864 exactly.
 FORCE_PACK_FIXTURES = ("f_tok", "f_cnt")
 
-# The two lines a packed run logs once at start, which the stage-2 log check
-# (stage2.sh NN_LOG_EXPECT) holds: the loader's, when it builds step items,
+# The two lines a packed run logs once at start: the loader's, when it builds step items,
 # and the backbone's, after its self-test at the production shape. kernel is
 # one of CHAT_KERNELS: compiled flex_attention, or the two flash varlen calls
 # of gate G-K's fallback.

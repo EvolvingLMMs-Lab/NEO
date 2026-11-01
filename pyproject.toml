@@ -25,9 +25,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# MT_Und images behind the object store: the aoss client (its sdk directory is
-# given by path) needs these.
-object-store = ["boto3", "environs", "marshmallow"]
 # Data preprocessing: the joint sidecars read AgiBot and DROID HDF5 (h5py); the
 # camera-pose QC uses OpenCV and, for DROID, SciPy rotations.
 prep = ["h5py", "scipy", "opencv-python-headless"]

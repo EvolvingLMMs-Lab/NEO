@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fine-tune on real-robot data with unpacked MT_Und at weight 0.1.
+# Fine-tune on real-robot data with unpacked COCO ShareGPT at weight 0.1.
 # Usage: bash scripts/posttrain_real.sh [--print-argv] [-- HYDRA_OVERRIDE ...]
 # Inputs and distributed settings: README.md.
 set -euo pipefail
@@ -8,7 +8,7 @@ NEO_REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
 
 neo_stage_args "$@"
 neo_need NEO_VLA_DATA_ROOT REAL_CORPUS STAGE2_CKPT NEO_VLA_BACKBONE NEO_VLA_OUTPUT_ROOT \
-    NEO_VLA_MTUND_ROOT NEO_VLA_MTUND_REGISTRY NEO_VLA_MTUND_LINE_INDEX
+    NEO_VLA_COCOGPTSHARE_RECORDS NEO_VLA_COCOGPTSHARE_IMAGES
 neo_shape
 
 MAX_STEPS=${MAX_STEPS:-30000}
@@ -38,12 +38,12 @@ esac
 
 NEO_ENV=(HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}" TRANSFORMERS_OFFLINE="${TRANSFORMERS_OFFLINE:-1}"
          NUMPY_MADVISE_HUGEPAGE="${NUMPY_MADVISE_HUGEPAGE:-0}"
-         NEO_VLA_MTUND_ROOT="$NEO_VLA_MTUND_ROOT" NEO_VLA_MTUND_REGISTRY="$NEO_VLA_MTUND_REGISTRY"
-         NEO_VLA_MTUND_LINE_INDEX="$NEO_VLA_MTUND_LINE_INDEX")
+         NEO_VLA_COCOGPTSHARE_RECORDS="$NEO_VLA_COCOGPTSHARE_RECORDS"
+         NEO_VLA_COCOGPTSHARE_IMAGES="$NEO_VLA_COCOGPTSHARE_IMAGES")
 
 train=(--root "$NEO_VLA_DATA_ROOT" --corpus "$REAL_CORPUS"
        --run-name "${RUN_NAME:-posttrain_real}" --backbone "$NEO_VLA_BACKBONE"
-       --arch skip28 --mode cotrain --data real_cotrain_mtund --schedule finetune
+       --arch skip28 --mode cotrain --data real_cotrain_cocogptshare --schedule finetune
        --output-root "$NEO_VLA_OUTPUT_ROOT" --nproc "$GPUS_PER_NODE" --workers "${WORKERS:-8}")
 if [ "$NNODES" != 1 ]; then
     train+=(--nnodes "$NNODES" --node-rank "$NODE_RANK" --master-addr "$MASTER_ADDR"
