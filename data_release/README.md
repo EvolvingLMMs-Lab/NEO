@@ -1,50 +1,47 @@
-# Data release
+# NEO-VLA Action Pretraining Data
 
-This directory describes the processed robot corpus NEO-VLA's action
-pretraining reads, `action_pretrain`. The processed data are published on
-Hugging Face as
-[weepiess2383/NEO-VLA-Action-Pretrain](https://huggingface.co/datasets/weepiess2383/NEO-VLA-Action-Pretrain).
-The upload is incremental and currently incomplete. Each source keeps its own
-terms (below).
+Processed robot demonstrations used for NEO-VLA action pretraining. The corpus
+contains 2,231,583 episodes and 928,401,030 timesteps from nine dataset families.
 
-| file | contents |
+The data are available on [Hugging Face](https://huggingface.co/datasets/weepiess2383/NEO-VLA-Action-Pretrain).
+The upload is ongoing; these counts refer to the full corpus, not the files
+currently available for download.
+
+| Document | Description |
 |---|---|
-| [`DATASET_CARD.md`](DATASET_CARD.md) | the dataset card: contents, size, processing, masks, limitations |
-| [`corpus_summary.json`](corpus_summary.json) | counts per family and per manifest source, the manifest and normaliser schemas, the episode drop rules |
-| [`sources_inventory.json`](sources_inventory.json) | the nine source families and their processed form; every licence is pending review |
-| [`UPSTREAM_TERMS.md`](UPSTREAM_TERMS.md) | the terms identified per source and what remains to be resolved |
-| [`upstream_license_metadata.json`](upstream_license_metadata.json) | the upstream repositories, revisions and licence metadata checked |
+| [Dataset card](DATASET_CARD.md) | Dataset composition, filtering, format and limitations |
+| [Corpus summary](corpus_summary.json) | Episode and timestep counts, metadata schemas and exclusion rules |
+| [Source inventory](sources_inventory.json) | Source datasets and their processed representations |
+| [Source terms](UPSTREAM_TERMS.md) | Upstream licenses, attribution requirements and review status |
+| [License metadata](upstream_license_metadata.json) | Upstream repositories and recorded license information |
 
-## Layout
+## Data format
 
-Paths are relative to the data root (`NEO_VLA_DATA_ROOT`):
+The training loader uses the following paths under `NEO_VLA_DATA_ROOT`:
 
-| path | contents |
+| Path | Contents |
 |---|---|
-| `manifests/action_pretrain.json` | every directory: cameras, arms, action layout, embodiment key, control rate, weight |
-| `metadata/action_pretrain/` | the normaliser `embodiments.json` (per-key bounds and per-directory masks) and per-episode filtering records |
-| `processed/action_pretrain/` | numeric arrow files, frame indexes, per-episode camera geometry and rendered prompts |
-| `agibot/`, `oxe/`, `rh20t/`, ... | the converted source directories, one per dataset |
+| `manifests/action_pretrain.json` | Dataset entries, camera views, action layouts and sampling weights |
+| `metadata/action_pretrain/` | Normalization bounds, channel masks and filtering records |
+| `processed/action_pretrain/` | Arrow trajectories, frame indexes, camera geometry and instruction caches |
 
-A corpus of your own, such as real-robot data for adaptation, uses the same
-layout under its own name: `manifests/<corpus>.json`, `metadata/<corpus>/`,
-`processed/<corpus>/`.
+Filtering code and commands are provided in the [filtering guide](../docs/preprocessing.md).
+The Hugging Face dataset contains processed data and metadata; scripts are
+maintained in this repository.
 
-## Masks and source metadata
+## Validity masks
 
-The loader applies masks that are recorded rather than baked into the values:
-dead, constant and wrap-gated channels per directory and key in
-`embodiments.json`, and action outliers per sample from its bounds. Anyone
-training with other code must apply them. The dataset card lists which effects
-are materialised and which are applied at load time.
+The loader applies the channel masks recorded in `embodiments.json` and masks
+outlier action groups using the normalization bounds. These masks must also be
+applied when using a different loader. The [dataset card](DATASET_CARD.md)
+distinguishes corrections stored in the files from masks applied during loading.
 
-## Terms and status
+Full-corpus camera-pose projection validation has not been completed for the
+current cache. See the dataset card for the scope of the calibration checks.
 
-The code is Apache-2.0; the data retain their original terms, which are
-source-specific and pending review ([upstream terms](UPSTREAM_TERMS.md)).
-The current processed cache records no completed projection census, so the
-camera-pose projection check of the fifth filtering rule is not certified for
-it (see the dataset card).
+## Licenses
 
-The filtering rules and their scripts are described in
-[`docs/preprocessing.md`](../docs/preprocessing.md).
+The source datasets retain their respective licenses. The repository's
+Apache-2.0 license applies to code and does not relicense the data. Source license
+review is ongoing; consult the [source terms](UPSTREAM_TERMS.md) for attribution
+and redistribution requirements.
