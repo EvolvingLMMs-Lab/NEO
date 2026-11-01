@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neo-vla"
+version = "0.1.0"
+license = {text = "Apache-2.0"}
+readme = "README.md"
+description = "Flow-matching vision-language-action policy on the NEO backbone"
+requires-python = ">=3.10"
+authors = [{ name = "Weichen Fan" }]
+dependencies = [
+    "torch>=2.6",
+    "torchvision",
+    "transformers>=4.50",
+    "hydra-core>=1.3",
+    "omegaconf>=2.3",
+    "pyyaml",
+    "numpy",
+    "pillow",
+    "safetensors",
+    "pyarrow",
+    "av",
+]
+
+[project.optional-dependencies]
+# Data filters: the camera-pose projection check uses OpenCV and, for DROID,
+# SciPy rotations.
+prep = ["scipy", "opencv-python-headless"]
+dev = ["pytest", "ruff", "h5py"]
+
+[tool.setuptools.packages.find]
+include = ["neo_vla*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "BLE", "B"]

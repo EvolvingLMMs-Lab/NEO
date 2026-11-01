@@ -1,0 +1,57 @@
+root: ${oc.env:NEO_VLA_DATA_ROOT}
+corpus: ???
+manifest: ${data.root}/manifests/${data.corpus}.json
+fit_check: true
+new_keys: true
+
+# Frame policy of the robot rows. null keeps each directory's manifest
+# frame_ref; wrist pins one posed camera per embodiment key
+# (frame_set: {<key>: [[camera:<slot>]]}, pin_keeps_other_poses true); random
+# draws among the listed frames per episode or per sample.
+frame_mode: null
+frame_set: {}
+frame_draw: episode
+pin_keeps_other_poses: false
+
+# flow loss + 0.1 x chat loss, every step: one COCO ShareGPT row per robot row.
+cotrain_weight: 0.1
+
+train:
+  _target_: neo_vla.data.dataset.RobotDataset
+  frame_mode: ${data.frame_mode}
+  frame_set: ${data.frame_set}
+  frame_draw: ${data.frame_draw}
+  pin_keeps_other_poses: ${data.pin_keeps_other_poses}
+  manifest: ${data.manifest}
+  root: ${data.root}
+  max_grid: ${model.prefix.max_grid}
+  pixels_per_token: 32
+  n_views: ${model.prefix.n_views}
+  n_slots: ${model.action.n_slots}
+  chunk: ${model.action.chunk}
+  action_dim: ${model.action.action_dim}
+  gripper_dims: ${model.action.gripper_dims}
+  tokenizer_id: ${oc.env:NEO_VLA_TOKENIZER_ID,neo-2b}
+  max_text_tokens: ${model.prefix.max_text_tokens}
+  epoch_samples: 3840000                  # every draw of the run; the launcher states max_steps x global_batch
+  seed: ${seed}
+  intrinsics_mode: ${model.prefix.intrinsics_mode}
+  pixel_convention: ${model.vision.pixel_convention}
+  normaliser: ${data.root}/metadata/${data.corpus}/embodiments.json
+  history_dropout: 0.1
+  state_noise: {sigma: 0.02, rot_sigma_rad: 0.02, prob: 0.8}   # as data/action_pretrain.yaml
+  understanding:
+    _target_: neo_vla.data.understanding.ShareGPT4VCoco
+    chat_format: neo_native
+    records: ${oc.env:NEO_VLA_COCOGPTSHARE_RECORDS}   # the ShareGPT4V-format json: a non-empty list of records
+    images: ${oc.env:NEO_VLA_COCOGPTSHARE_IMAGES}     # each record's image reference is joined onto this root
+    tokenizer_path: ${model.tokenizer_path}
+    min_pixels: 65536
+    max_pixels: 1003520
+    max_tokens: 4096                          # a longer row is dropped, never cut
+    pack_tokens: null                         # no pack: one chat row per robot row
+    pack_micro_batches: null
+    force_pack: null
+    thinking_method: tag                      # as NEOpp-2B-SFT was trained
+    pixel_convention: ${model.vision.pixel_convention}   # must be neo_native
+    seed: ${seed}

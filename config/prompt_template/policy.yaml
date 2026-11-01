@@ -1,0 +1,56 @@
+template:
+  name: neo
+  prefix_layout: native
+
+scaffold_sections:
+  axis:
+    number: 1
+    # Three slots per view, and the order here is the column order: <cam_k>,
+    # the calibration, the camera's rotation, then that view's 88 image
+    # columns. The Earlier and Now blocks both lay a view down this way.
+    per_view_slots: ["cam", "intrinsics", "extrinsics"]
+    # tokens gives each of the twelve columns a projection of its own, and a
+    # view whose geometry was never measured still spends all twelve
+    # positions, each on its own learned unknown row.
+    geometry: tokens
+
+order:
+  - frequency_section
+  - frequency
+  - embodiment_section
+  - embodiment
+  - embodiment_frame_clause
+  - demonstration_section
+  - tasks_section
+  - instruction
+
+section_joiner: "\n"
+
+sentences:
+  frequency_section: "2. Frequency information:"
+  frequency: "Frequency: {frequency}"
+  embodiment_section: "3. Embodiment information:"
+  demonstration_section: "4. Demonstration:"
+  tasks_section: "5. Tasks:"
+  instruction: "Instruction: {task}"
+
+slots:
+  frequency:
+    # One number per directory, the manifest's control_hz: two decimals with
+    # trailing zeros dropped ("30 Hz", "16.67 Hz", "3.75 Hz"), or the unknown
+    # word when the directory has none. Every key is read and held against
+    # neo_vla.data.prompt.template.FREQUENCY_SLOT.
+    text: per_dataset
+    unit: "Hz"
+    unknown: "NA"
+    decimals: 2
+  embodiment:
+    # Free text: the clause of the directory's embodiment key, from
+    # config/embodiments.yaml (per episode for RH20T).
+    text: per_dataset
+  embodiment_frame_clause:
+    # Free text, and the last clause of section 3, so a camera-frame sentence
+    # replaces the robot-frame one by position.
+    text: per_sample
+  instruction:
+    text: per_sample
