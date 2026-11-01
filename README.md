@@ -129,21 +129,10 @@ filters exclude implausible joint readings, mask unreliable channels and
 out-of-band action groups, drop corrupt episodes, and mark camera poses unknown
 when calibration checks fail.
 
-The processed data and normalization records are published on Hugging Face
-as [weepiess2383/NEO-VLA-Action-Pretrain](https://huggingface.co/datasets/weepiess2383/NEO-VLA-Action-Pretrain).
-The upload is incremental and currently incomplete. This repository contains
-the filter scripts; the data and normalizer are obtained from the dataset.
-
 | Resource | Contents |
 |---|---|
-| [Hugging Face dataset](https://huggingface.co/datasets/weepiess2383/NEO-VLA-Action-Pretrain) | Processed corpus and normalization records (incremental upload) |
-| [Filtering guide](docs/preprocessing.md) | The five filtering rules and their scripts |
-| [Dataset card](data_release/DATASET_CARD.md) | Corpus inventory, masks and verification status |
-| [Data release](data_release/README.md) | Dataset layout and release status |
-| [Upstream terms](data_release/UPSTREAM_TERMS.md) | Per-source licenses and redistribution requirements |
-
-Model checkpoints are not included in this repository. Each source dataset
-keeps its own terms; see the dataset card and upstream terms.
+| [Dataset card](data_release/DATASET_CARD.md) | Corpus inventory, processing and data access |
+| [Filter scripts](tools/) | The five filtering rules |
 
 ## Citation
 
