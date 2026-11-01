@@ -1,16 +1,23 @@
 # Training NEO-VLA
 
 The launchers implement three stages on the `skip28` architecture. Stages 2 and
-3 use local COCO ShareGPT conversations in NEO's native chat format. The COCO
-recipes use one unpacked chat row per robot row at loss weight 0.1. For
-comparisons with reported results, use the checkpoint-specific experimental protocol.
+3 combine robot action data with multimodal understanding data in NEO's native
+chat format. COCO ShareGPT is the default example supplied with the repository.
+Other image–text conversation datasets can use the same reader when their
+annotations and image paths follow the format below; datasets with a different
+schema require a compatible reader configured under `data.train.understanding`.
+The example configurations use one unpacked chat row per robot row at loss
+weight 0.1. For comparisons with reported results, use the checkpoint-specific
+experimental protocol.
 
 Commands below run from the repository root. Install the package and obtain the
 NEOpp-2B-SFT checkpoint and tokenizer as described in the [README](../README.md).
 
-## COCO ShareGPT inputs
+## Multimodal understanding data
 
-Obtain the annotations from [ShareGPT4V](https://github.com/ShareGPT4Omni/ShareGPT4V)
+### Default example: COCO ShareGPT
+
+For the supplied example, obtain the annotations from [ShareGPT4V](https://github.com/ShareGPT4Omni/ShareGPT4V)
 and COCO images under their respective terms. Use a COCO-only annotation file;
 the loader reads the supplied list as-is and does not select COCO records from
 a mixed-source annotation file.
@@ -43,7 +50,7 @@ relative paths in the selected annotations. `image` may also be a list, and an
 redrawn; persistent failures stop the loader. Prepare the file and image tree
 consistently before a run.
 
-Both COCO recipes set `min_pixels=65536`, `max_pixels=1003520` and
+Both example configurations set `min_pixels=65536`, `max_pixels=1003520` and
 `max_tokens=4096`. A single image uses the stated pixel budget; multi-image
 rows share NEO's image budget, with a per-image maximum of
 `max(2 * max_pixels // image_count, min_pixels)`.

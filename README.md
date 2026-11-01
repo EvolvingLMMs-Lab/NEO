@@ -93,23 +93,25 @@ must contain a manifest, prompt cache and normalizer; see the
 
 ## Training
 
-| Stage | Trainable components | Robot data | Vision-language data | Launcher |
+| Stage | Trainable components | Robot data | Co-training data | Launcher |
 |---|---|---|---|---|
 | **1 · Action pretraining** | Action expert and prefix tokenizers | Prepared pretraining corpus | — | [`stage1.sh`](scripts/stage1.sh) |
-| **2 · Joint training** | Full policy | Prepared pretraining corpus | COCO ShareGPT | [`stage2.sh`](scripts/stage2.sh) |
-| **3 · Robot adaptation** | Full policy | Your real-robot corpus | COCO ShareGPT | [`posttrain_real.sh`](scripts/posttrain_real.sh) |
+| **2 · Joint training** | Full policy | Prepared pretraining corpus | Multimodal understanding data | [`stage2.sh`](scripts/stage2.sh) |
+| **3 · Robot adaptation** | Full policy | Your real-robot corpus | Multimodal understanding data | [`posttrain_real.sh`](scripts/posttrain_real.sh) |
 
-**COCO ShareGPT is the default language co-training source** in stages 2 and 3.
-The loader reads local ShareGPT4V-format conversations and their COCO images:
+**Stages 2 and 3 co-train on multimodal understanding data.** COCO ShareGPT is
+provided as the default example in the supplied configurations. The example
+loader reads local ShareGPT4V-format image–text conversations:
 
 ```bash
 export NEO_VLA_COCOGPTSHARE_RECORDS=/path/to/cocogptshare.json
 export NEO_VLA_COCOGPTSHARE_IMAGES=/path/to/images
 ```
 
-Both stages use one unpacked chat row per robot row, with a chat loss weight of
-0.1. These are the repository's COCO co-training recipes; the project page
-reports the experimental settings used for its results.
+The example configurations use one unpacked chat row per robot row at a chat
+loss weight of 0.1. Other image–text conversation datasets can be used by
+providing compatible annotations and image paths, or by adding a dataset reader.
+The project page reports the experimental settings used for its results.
 
 The [training guide](docs/training.md) covers dataset layout, checkpoint
 initialization, distributed launch commands and recipe parameters.
