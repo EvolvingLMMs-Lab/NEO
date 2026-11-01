@@ -5,10 +5,10 @@
 <h2 align="center">From Pixels to Actions:<br>Towards Native Vision-Language-Action Policies</h2>
 
 <p align="center">
-  Weichen Fan<sup>1,*</sup>, Haiwen Diao<sup>1,*,♯</sup>, Penghao Wu<sup>1</sup>, Siyuan Hu<sup>1</sup>,<br>
-  Ziqi Huang<sup>1</sup>, Tianqi Liu<sup>1,3</sup>, Mingze Sun<sup>1</sup>, Ziyi Wang<sup>1</sup>,<br>
-  Zhongang Cai<sup>2</sup>, Hanming Deng<sup>2</sup>, Quan Wang<sup>2</sup>, Lei Yang<sup>2</sup>, Lewei Lu<sup>2</sup>,<br>
-  Fangzhou Hong<sup>3</sup>, Zhaoxi Chen<sup>3</sup>, Dahua Lin<sup>2</sup>, Ziwei Liu<sup>1,†</sup>
+  <a href="https://weichenfan.github.io/Weichen/">Weichen Fan</a><sup>1,*</sup>, <a href="https://paranioar.github.io/">Haiwen Diao</a><sup>1,*,♯</sup>, <a href="https://penghao-wu.github.io/">Penghao Wu</a><sup>1</sup>, <a href="https://sy-h.com/">Siyuan Hu</a><sup>1</sup>,<br>
+  <a href="https://ziqihuangg.github.io/">Ziqi Huang</a><sup>1</sup>, <a href="https://tqtqliu.github.io/">Tianqi Liu</a><sup>1,3</sup>, <a href="https://mingzesun0514.github.io/">Mingze Sun</a><sup>1</sup>, Ziyi Wang<sup>1</sup>,<br>
+  <a href="https://caizhongang.com/">Zhongang Cai</a><sup>2</sup>, <a href="https://scholar.google.com/citations?user=NSeqMYIAAAAJ">Hanming Deng</a><sup>2</sup>, <a href="https://scholar.google.com/citations?user=KmxEHm4AAAAJ">Quan Wang</a><sup>2</sup>, <a href="https://yanglei.me/">Lei Yang</a><sup>2</sup>, <a href="https://scholar.google.com/citations?user=zdgKJXIAAAAJ">Lewei Lu</a><sup>2</sup>,<br>
+  <a href="https://hongfz16.github.io/">Fangzhou Hong</a><sup>3</sup>, <a href="https://frozenburning.github.io/">Zhaoxi Chen</a><sup>3</sup>, <a href="https://dahua.me/">Dahua Lin</a><sup>2</sup>, <a href="https://liuziwei7.github.io/">Ziwei Liu</a><sup>1,†</sup>
 </p>
 <p align="center">
   <sup>1</sup>S-Lab, Nanyang Technological University · <sup>2</sup>SenseTime Research · <sup>3</sup>Ropedia<br>
