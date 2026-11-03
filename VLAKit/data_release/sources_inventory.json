@@ -1,0 +1,28 @@
+{
+ "schema": "neo_vla_data_release_source_inventory_v1",
+ "corpus": "action_pretrain",
+ "status": "Licence and redistribution terms of every source are pending review. Nothing in this file states or implies a licence; see UPSTREAM_TERMS.md for the terms identified per source and what remains to be resolved.",
+ "families": [
+  {"family": "agibot", "upstream_dataset": "AgiBot World (Beta)", "manifest_sources": ["agibot"],
+   "processed_form": "converted episode directories; joint and body sidecars", "license": "pending review", "redistribution": "unknown"},
+  {"family": "droid3cam", "upstream_dataset": "DROID", "manifest_sources": ["droid3cam"],
+   "processed_form": "converted episode directories (three cameras); joint sidecars", "license": "pending review", "redistribution": "unknown"},
+  {"family": "oxe", "upstream_dataset": "Open X-Embodiment (OXE)", "manifest_sources": ["oxe"],
+   "processed_form": "converted episode directories; joint sidecars (joints recorded for five datasets, all not-recorded for the rest)",
+   "notes": "a collection of separately published datasets; each dataset's own terms apply and are reviewed one by one",
+   "license": "pending review", "redistribution": "unknown"},
+  {"family": "rh20t", "upstream_dataset": "RH20T", "manifest_sources": ["rh20t"],
+   "processed_form": "converted episode directories on a fixed time grid; joint sidecars", "license": "pending review", "redistribution": "unknown"},
+  {"family": "interndata", "upstream_dataset": "InternData-A1",
+   "manifest_sources": ["interndata_a1_franka_hand", "interndata_a1_franka_robotiq", "interndata_a1_genie1", "interndata_a1_lift2", "interndata_a1_split_aloha"],
+   "processed_form": "converted episode directories with joints in the parquet", "license": "pending review", "redistribution": "unknown"},
+  {"family": "robocoin", "upstream_dataset": "RoboCOIN", "manifest_sources": ["robocoin", "robocoin_hands"],
+   "processed_form": "converted episode directories with joints, and hand or body where the robot records them, in the parquet", "license": "pending review", "redistribution": "unknown"},
+  {"family": "galaxea", "upstream_dataset": "Galaxea Open-World Dataset", "manifest_sources": ["galaxea_owd"],
+   "processed_form": "converted episode directories with joints and body in the parquet", "license": "pending review", "redistribution": "unknown"},
+  {"family": "bimanual_yam", "upstream_dataset": "BimanualYAM", "manifest_sources": ["bimanual_yam"],
+   "processed_form": "one converted directory, joints only", "license": "pending review", "redistribution": "unknown"},
+  {"family": "robomind", "upstream_dataset": "RoboMIND", "manifest_sources": ["robomind", "robomind_tienkung"],
+   "processed_form": "converted episode directories with joints (and hand for one Tien Kung key) in the parquet", "license": "pending review", "redistribution": "unknown"}
+ ]
+}

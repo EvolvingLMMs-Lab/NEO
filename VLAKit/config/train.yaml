@@ -1,0 +1,77 @@
+# The root config: a run is one choice from each group plus the trainer
+# settings below. Machine facts (paths, devices, node counts, loader workers)
+# come from the environment, never from here.
+
+defaults:
+  - model: neo2b
+  - arch: ???
+  - mode: ???
+  - data: ???
+  - schedule: ???
+  - _self_
+
+# Names the run and with it the run directory, so relaunching with the same
+# name resumes the run.
+run_name: ???
+
+seed: 0
+
+hydra:
+  run:
+    dir: ${oc.env:NEO_VLA_OUTPUT_ROOT,outputs}/${run_name}
+
+trainer:
+  strategy: ddp
+  strategy_options: {}
+  gradient_clip: 1.0
+  log_every: 20
+  save_every: 1000
+  keep_checkpoints: 2
+  ema_decay: null
+  # Recompute the backbone's layer activations in the backward rather than
+  # holding all forty. A co-train run takes the stack to chat length, where the
+  # activations rather than the weights are the binding memory cost.
+  gradient_checkpointing: false
+  # Run the backbone's and the expert's layers through torch.compile (inductor,
+  # static shapes), everything around them eager; the model and its weights are
+  # unchanged, only the kernels. Training only. The first step pays the
+  # compile. Accepted with ddp and without gradient_checkpointing
+  # (neo_vla/model/compiled_layers.py).
+  compile_layers: false
+  # Two stage-2 robot-path settings, unstated here; a launch adds them with a
+  # leading +.
+  #   +trainer.compile_robot=true: the robot prefix's backbone layers (each
+  #   holding its recomputation inside the compiled graph) and the expert's
+  #   layers through torch.compile; the chat pack's layers stay eager
+  #   (neo_vla/model/compiled_layers.py compile_robot). ddp only.
+  #   +trainer.robot_recompute_layers=k: under gradient_checkpointing, a
+  #   robot-only micro-batch recomputes the first k backbone layers and keeps the
+  #   rest's activations; null (unstated) recomputes all 40, a chat micro-batch
+  #   always all 40.
+  # Cut the prefix's trailing pad to the micro-batch's longest row, rounded up
+  # to this many columns and capped at Lp; 0 keeps all Lp columns. The cut
+  # columns are pad, masked for every query and every expert token, so every
+  # real column computes the same function (on the GPU the same numbers up to
+  # rounding). Training only. A compiled layer compiles once per width it
+  # meets, hence the bucket.
+  trim_prefix: 0
+  # A checkpoint whose weights start this run, for a stage that continues an
+  # earlier one. Unlike a resume it takes the model and nothing else: the
+  # optimiser, the schedule, the step counter and the sampler all start fresh.
+  # A checkpoint already under this run's own directory still wins, so a
+  # restart resumes rather than starting over.
+  init_from: null
+  # Overlay the named checkpoint's EMA onto its raw weights at init. No
+  # default: a run that states init_from states this too, and the runner
+  # refuses one that does not. Stage 2 and post-training start from the
+  # previous stage's EMA.
+  init_use_ema: null
+  # Key prefixes init_from is not allowed to supply: those modules keep their
+  # build init while the rest comes from the checkpoint. Only meaningful for a
+  # module the mode trains. A prefix matching no key is an error.
+  init_skip: []
+  # How many of the states that produced a non-finite gradient to keep. A
+  # skipped update leaves the weights untouched, so the state written then is
+  # exactly the state that produced it, which a replay needs. They go in their
+  # own directory so ordinary retention cannot delete them; 0 turns this off.
+  keep_skipped: 3
