@@ -1,0 +1,17 @@
+# @package schedule
+# A later stage on a small corpus, started from a pretrain's weights.
+# scripts/posttrain_real.sh states the steps, batch, rates, warmup and weight
+# decay on its command line; the Adam betas and eps are these.
+max_steps: 6000
+global_batch: 512
+per_device_batch: 8
+gradient_accumulation_steps: null
+learning_rate: 2.0e-5
+# Backbone, vision tower and co-train head at this rate, the rest at
+# learning_rate, one warmup and cosine for both; null is one group.
+vlm_learning_rate: null
+lr_final: 2.0e-6
+warmup_steps: 200
+adam_betas: [0.9, 0.95]
+adam_eps: 1.0e-8
+weight_decay: 1.0e-10

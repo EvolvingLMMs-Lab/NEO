@@ -1,0 +1,684 @@
+# The embodiment keys: which normaliser entry a directory's actions and state go
+# through, and the clause section 3 of every prompt of that key reads. One key
+# per embodiment, so a clause names exactly one set of q01/q99 numbers: an
+# entry in embodiments.json is compared with its clause, and the runner and
+# build_manifest refuse two keys that share one.
+#
+# Read by tools/build_embodiment.py (directory -> key, or episode -> key for
+# RH20T), tools/build_stats.py (one entry per key) and tools/build_cache.py
+# (the clause a record renders). Nothing here is a number the model reads.
+#
+# Fields per key:
+#   robot         what the robot is, paraphrased from the OXE embodiment spec
+#                 (openvla_oxe_lerobot/_unify/embodiment_spec.json) and not
+#                 copied from it
+#   slots         the action slots the key's arms fill (arms[k].slot); a
+#                 directory arm at another slot is refused
+#   effector      parallel, three_finger, none or unknown. none: no directory
+#                 of the key trains a gripper column (tools/build_stats.py
+#                 check_effector refuses one that does); its layout masks
+#                 the gripper with a written reason. A key whose every
+#                 directory masks its gripper states gripper_valid false in
+#                 embodiments.json, with gripper bounds 0 and 1 as every key.
+#   stage         pretrain, or finetune: a key new to the lineage at post-train
+#   clause        section 3's robot sentence, rendered as written
+#   frame_clause / frame_clause_by_key: defaults and per-key frame sentences.
+#   frame_clause_by_source: per-key source spellings retained from existing caches.
+#   ee_frame_fix  R_c, applied as R_base<-ee . R_c to the state's 6D only (the
+#                 mounted cameras, drot conversion and extrinsics keep the raw
+#                 R), or null. Only agibot_g1 has one: its fingers close along
+#                 EE x where every other stage-1 key with state closes along
+#                 EE y; Rz(+90 deg) puts image-right at EE -y,
+#                 as DROID and RH20T. It is part of the entry's identity.
+#   action_from   finetune keys only: the pretrain key whose action entry this
+#                 key copies, value for value
+#   action_from_groups  with action_from only: the action groups copied
+#                 (neo_vla.data.embodiment.ACTION_GROUPS: joints, ee, hand; ee is
+#                 dpos, drot and the gripper, the columns every benchmark
+#                 executes); the other groups are measured on the key's own rows.
+#                 Not stated: every group is copied.
+#   joints        v7: {count, names, unit} of one arm's
+#                 joints in the stored order (URDF order where it was checked),
+#                 or null for a key whose data records none
+#   hand          v7: {count, order, unit, polarity_note} or null
+#   body          v7: absent, or {base, torso, head}: base one of
+#                 odometry, command, imu_yaw, still, none; torso and head the
+#                 joint names, or none where the source records no such part
+#                 (a body every dimension of which is none is UNKNOWN)
+#                 tools/key_table.py reads the three; every entry identity holds
+#                 them (build_stats copies them into embodiments.json v2).
+#
+# Mixture masses (analytic trajectory weights; they sum to 1.0):
+# agibot_g1 0.500, franka_panda 0.1471 (DROID 0.100, RH20T cfg5 0.03801, nine
+# OXE families about 0.0091), flexiv_rizon 0.13101, kuka_iiwa 0.08179,
+# ur5 0.04948, kuka_qtopt 0.02835, xarm_pusher 0.02327, google_bcz 0.01807,
+# google_rt1 0.01251, widowx 0.00431, dobbe_stick 0.00358, kinova_jaco 0.00022,
+# fanuc_mate 0.00020, hello_stretch 0.00008, dlr_edan 0.00003.
+#
+# aloha_agilex: its EE approach axis (+x) and base-axis swap are post-train
+# decisions; ee_frame_fix stays null until they are made.
+
+schema: neo_vla_embodiment_keys_v2
+
+# The official frame sentences. Per-key entries below override these only for
+# already-published frame conventions; manifests may repeat, never replace them.
+frame_clause:
+  camera: "Each arm's frame token names the frame that arm's actions and extrinsics are written in."
+  robot: "Actions are expressed in the robot base frame."
+
+# Kept outside the generated key declarations so ingest keys --write preserves
+# this prompt authority. Empty camera clauses are unused (robot-only corpora).
+frame_clause_by_key:
+  yam_bimanual: {camera: ""}
+  robomind_franka: {camera: ""}
+  robomind_ur5e: {camera: ""}
+  robomind_fr3_dual:
+    camera: ""
+    robot: "Each arm's actions are expressed in that arm's own base frame."
+  robomind_agilex_cobot_magic:
+    robot: "Each arm's actions are expressed in that arm's own base frame."
+  robomind_tienkung_gello:
+    camera: ""
+    robot: "Each arm's actions are expressed in that arm's own base frame."
+  robomind_tienkung_xsens:
+    camera: ""
+    robot: "Each arm's actions are expressed in that arm's own base frame."
+
+# RH20T is keyed per episode from meta/episodes.jsonl rh20t_robot, joined by
+# the kept episode's own episode_index (never by line position).
+rh20t_robot_keys:
+  flexiv: flexiv_rizon
+  ur5: ur5
+  franka: franka_panda
+  kuka: kuka_iiwa
+
+keys:
+  piper_pika:
+    # Exact declarations of the verified real-data key. Ry(+90) maps the
+    # recorded endPose E orientation to the flange for state 6D only.
+    # Fit this key's own normaliser; no pretrain key supplies its bounds.
+    robot: "AgileX PiPER arm with a Pika parallel gripper (real robot)"
+    slots: [0]
+    effector: parallel
+    stage: finetune
+    clause: "The robot is an AgileX PiPER arm with a Pika parallel gripper."
+    ee_frame_fix: [[0, 0, 1], [0, 1, 0], [-1, 0, 0]]
+    joints:
+      count: 6
+      names: [joint_1, joint_2, joint_3, joint_4, joint_5, joint_6]
+      unit: rad
+      note: "target: command:action.joints"
+    hand: null
+    body: absent
+  agibot_g1:
+    robot: "AgiBot G1"
+    slots: [0, 1]
+    effector: parallel
+    stage: pretrain
+    clause: "The robot is an AgiBot G1 with two arms and parallel grippers."
+    ee_frame_fix: [[0, -1, 0], [1, 0, 0], [0, 0, 1]]
+    joints:
+      count: 7
+      names: [arm_joint_1, arm_joint_2, arm_joint_3, arm_joint_4, arm_joint_5, arm_joint_6, arm_joint_7]
+      unit: rad
+      note: "state/joint/position [:, :7] left, [:, 7:] right; names and order within an arm [unverified] (no URDF on disk)"
+    hand: null
+    body: {base: odometry, torso: [waist_pitch, waist_lift], head: [head_yaw, head_pitch]}
+  franka_panda:
+    # Preserve the published DROID spelling without changing other Panda data.
+    frame_clause_by_source:
+      droid3cam:
+        camera: "Each arm frame token names the frame that arm actions and extrinsics are written in."
+    # DROID (41 shards), RH20T cfg5 episodes, and the OXE families
+    # austin_buds, austin_sailor, austin_sirius, utaustin_mutex, viola,
+    # taco_play, stanford_hydra, fmb and nyu_franka_play.
+    robot: "Franka Emika Panda"
+    slots: [0]
+    effector: parallel
+    stage: pretrain
+    clause: "The robot is a Franka Panda with a parallel gripper."
+    ee_frame_fix: null
+    joints:
+      count: 7
+      names: [panda_joint1, panda_joint2, panda_joint3, panda_joint4, panda_joint5, panda_joint6, panda_joint7]
+      unit: rad
+      note: "DROID trains the commanded joints (action.joints), RH20T cfg5 and OXE group A the next state"
+    hand: null
+    body: absent
+  flexiv_rizon:
+    # RH20T cfg1 and cfg2.
+    robot: "Flexiv Rizon"
+    slots: [0]
+    effector: parallel
+    stage: pretrain
+    clause: "The robot is a Flexiv Rizon with a parallel gripper."
+    ee_frame_fix: null
+    joints:
+      count: 7
+      names: [joint1, joint2, joint3, joint4, joint5, joint6, joint7]
+      unit: rad
+    hand: null
+    body: absent
+  kuka_iiwa:
+    # RH20T cfg6 and cfg7. Split from kuka_qtopt: under pooled stats RH20T
+    # kuka reaches p99 |y| of only 0.267.
+    robot: "KUKA iiwa"
+    slots: [0]
+    effector: parallel
+    stage: pretrain
+    clause: "The robot is a KUKA iiwa with a parallel gripper."
+    ee_frame_fix: null
+    joints:
+      count: 7
+      names: [lbr_iiwa_joint_1, lbr_iiwa_joint_2, lbr_iiwa_joint_3, lbr_iiwa_joint_4, lbr_iiwa_joint_5, lbr_iiwa_joint_6, lbr_iiwa_joint_7]
+      unit: rad
+    hand: null
+    body: absent
+  kuka_qtopt:
+    # OXE kuka, 39 directories.
+    robot: "KUKA arm (QT-Opt bin-picking rig)"
+    slots: [0]
+    effector: parallel
+    stage: pretrain
+    clause: "The robot is a KUKA arm in the QT-Opt bin-picking rig with a parallel gripper."
+    ee_frame_fix: null
+    joints: null
+    hand: null
+    body: absent
+  ur5:
+    # RH20T cfg3 and cfg4, and OXE berkeley_autolab_ur5.
+    robot: "Universal Robots UR5"
+    slots: [0]
+    effector: parallel
+    stage: pretrain
+    clause: "The robot is a Universal Robots UR5 with a parallel gripper."
+    ee_frame_fix: null
+    joints:
+      count: 6
+      names: [shoulder_pan_joint, shoulder_lift_joint, elbow_joint, wrist_1_joint, wrist_2_joint, wrist_3_joint]
+      unit: rad
+    hand: null
+    body: absent
+  google_rt1:
+    # OXE fractal.
+    robot: "Google / Everyday Robots mobile manipulator (RT-1)"
+    slots: [0]
+    effector: parallel
+    stage: pretrain
+    clause: >-
+      The robot is a Google / Everyday Robots mobile manipulator (RT-1) with a parallel
+      gripper.
+    ee_frame_fix: null
+    joints: null
+    hand: null
+    body: {base: none, torso: none, head: none}
+  google_bcz:
+    # OXE bc_z. Split from google_rt1: under pooled stats bc_z reaches p99 |y|
+    # of only 0.25.
+    robot: "Google / Everyday Robots mobile manipulator (BC-Z)"
+    slots: [0]
+    effector: parallel
+    stage: pretrain
+    clause: >-
+      The robot is a Google / Everyday Robots mobile manipulator (BC-Z) with a parallel
+      gripper.
+    ee_frame_fix: null
+    joints: null
+    hand: null
+    body: {base: none, torso: none, head: none}
+  xarm_pusher:
+    # OXE language_table. Its stored gripper is a fabricated constant, masked
+    # in the layout (constant_fabricated), so the key trains no gripper.
+    robot: "UFACTORY xArm (planar pushing rig)"
+    slots: [0]
+    effector: none
+    stage: pretrain
+    clause: "The robot is a UFACTORY xArm in a planar pushing rig with no gripper."
+    ee_frame_fix: null
+    joints: null
+    hand: null
+    body: absent
+  widowx:
+    # OXE bridge_orig.
+    robot: "WidowX"
+    slots: [0]
+    effector: parallel
+    stage: pretrain
+    clause: "The robot is a WidowX with a parallel gripper."
+    ee_frame_fix: null
+    joints: null
+    hand: null
+    body: absent
+  dobbe_stick:
+    # OXE dobbe. The robot string is the embodiment spec's [unverified].
+    robot: "Hello Robot Stretch / Dobb-E 'Stick' rig"
+    slots: [0]
+    effector: parallel
+    stage: pretrain
+    clause: "The robot is a Hello Robot Stretch / Dobb-E 'Stick' rig with a parallel gripper."
+    ee_frame_fix: null
+    joints: null
+    hand: null
+    body: absent
+  kinova_jaco:
+    # OXE jaco_play.
+    robot: "Kinova Jaco 2"
+    slots: [0]
+    effector: three_finger
+    stage: pretrain
+    clause: "The robot is a Kinova Jaco 2 with a three-finger gripper."
+    ee_frame_fix: null
+    joints: null
+    hand: null
+    body: absent
+  fanuc_mate:
+    # OXE berkeley_fanuc. Its drot is masked (unresolved convention) and its
+    # gripper is masked (state_leakage), so only translation trains.
+    robot: "FANUC Mate 200iD (6-DoF)"
+    slots: [0]
+    effector: parallel
+    stage: pretrain
+    clause: "The robot is a FANUC Mate 200iD with a parallel gripper."
+    ee_frame_fix: null
+    joints:
+      count: 6
+      names: [joint_1, joint_2, joint_3, joint_4, joint_5, joint_6]
+      unit: rad
+      note: "OXE berkeley_fanuc observation.state[0:6]; names positional"
+    hand: null
+    body: absent
+  hello_stretch:
+    # OXE cmu_stretch.
+    robot: "Hello Robot Stretch"
+    slots: [0]
+    effector: parallel
+    stage: pretrain
+    clause: "The robot is a Hello Robot Stretch with a parallel gripper."
+    ee_frame_fix: null
+    joints: null
+    hand: null
+    body: {base: none, torso: none, head: none}
+  dlr_edan:
+    # OXE dlr_edan_shared_control. The effector is unknown, so the clause names none.
+    robot: "DLR EDAN wheelchair-mounted assistive arm"
+    slots: [0]
+    effector: unknown
+    stage: pretrain
+    clause: "The robot is a DLR EDAN wheelchair-mounted assistive arm."
+    ee_frame_fix: null
+    joints: null
+    hand: null
+    body: {base: none, torso: none, head: none}
+  libero_franka_sim:
+    # The LIBERO simulation benchmarks. The executed block (ee: dpos, drot,
+    # gripper) is franka_panda's, copied, so the pretrain scale is kept; the
+    # joints, which LIBERO never executes, and the state bounds are its own
+    # (LIBERO positions in the robot base frame).
+    robot: "Franka Emika Panda (robosuite simulation)"
+    slots: [0]
+    effector: parallel
+    stage: finetune
+    action_from: franka_panda
+    action_from_groups: [ee]
+    clause: >-
+      The robot is a Franka Emika Panda in robosuite simulation with a parallel gripper.
+    ee_frame_fix: null
+    joints:
+      count: 7
+      names: [joint1, joint2, joint3, joint4, joint5, joint6, joint7]
+      unit: rad
+      note: "robosuite robot0_joint_pos"
+    hand: null
+    body: absent
+  aloha_agilex:
+    # RoboTwin 2.0.
+    robot: "AgileX Aloha (dual arm)"
+    slots: [0, 1]
+    effector: parallel
+    stage: finetune
+    clause: "The robot is a dual-arm AgileX Aloha with a parallel gripper on each arm."
+    ee_frame_fix: null
+    joints:
+      count: 6
+      names: [joint_1, joint_2, joint_3, joint_4, joint_5, joint_6]
+      unit: rad
+      note: "RoboTwin joint_action left_arm / right_arm (the drive targets); names positional"
+    hand: null
+    body: absent
+  # Additional pretraining embodiments.
+  # interndata_a1: from its ingest converter's embodiments()
+  interndata_franka_hand:
+    robot: Franka Emika Panda with the Franka hand (Isaac simulation)
+    slots: [0]
+    effector: parallel
+    stage: pretrain
+    clause: The robot is a simulated Franka Emika Panda with a Franka parallel gripper.
+    ee_frame_fix: null
+    joints:
+      count: 7
+      names: [joint_0, joint_1, joint_2, joint_3, joint_4, joint_5, joint_6]
+      unit: rad
+    hand: null
+    body: absent
+  interndata_franka_robotiq:
+    robot: Franka Emika Panda with a Robotiq-style two-finger gripper (Isaac simulation)
+    slots: [0]
+    effector: parallel
+    stage: pretrain
+    clause: The robot is a simulated Franka Emika Panda with a Robotiq two-finger gripper.
+    ee_frame_fix: null
+    joints:
+      count: 7
+      names: [joint_0, joint_1, joint_2, joint_3, joint_4, joint_5, joint_6]
+      unit: rad
+    hand: null
+    body: absent
+  interndata_genie1:
+    robot: AgiBot Genie-1 (Isaac simulation)
+    slots: [0, 1]
+    effector: parallel
+    stage: pretrain
+    clause: The robot is a simulated AgiBot Genie-1 with two arms and parallel grippers.
+    ee_frame_fix:
+    - [0, -1, 0]
+    - [1, 0, 0]
+    - [0, 0, 1]
+    joints:
+      count: 7
+      names: [joint_0, joint_1, joint_2, joint_3, joint_4, joint_5, joint_6]
+      unit: rad
+    hand: null
+    body: {base: none, torso: none, head: none}
+  interndata_lift2:
+    robot: ARX Lift-2 with R5a arms (Isaac simulation)
+    slots: [0, 1]
+    effector: parallel
+    stage: pretrain
+    clause: The robot is a simulated ARX Lift-2 with two arms and parallel grippers.
+    ee_frame_fix:
+    - [0, 0, 1]
+    - [0, 1, 0]
+    - [-1, 0, 0]
+    joints:
+      count: 6
+      names: [joint_0, joint_1, joint_2, joint_3, joint_4, joint_5]
+      unit: rad
+    hand: null
+    body: {base: none, torso: none, head: none}
+  interndata_split_aloha:
+    robot: AgileX Split Aloha with Piper arms (Isaac simulation)
+    slots: [0, 1]
+    effector: parallel
+    stage: pretrain
+    clause: The robot is a simulated AgileX Split Aloha with two Piper arms and parallel grippers.
+    ee_frame_fix:
+    - [0, -1, 0]
+    - [1, 0, 0]
+    - [0, 0, 1]
+    joints:
+      count: 6
+      names: [joint_0, joint_1, joint_2, joint_3, joint_4, joint_5]
+      unit: rad
+    hand: null
+    body: absent
+  # bimanual_yam: from its ingest converter's embodiments()
+  yam_bimanual:
+    robot: YAM (dual arm)
+    slots: [0, 1]
+    effector: parallel
+    stage: pretrain
+    ee_frame_fix: null
+    clause: The robot is a dual-arm YAM with a parallel gripper on each arm.
+    joints:
+      count: 6
+      names: [joint_0, joint_1, joint_2, joint_3, joint_4, joint_5]
+      unit: rad
+    hand: null
+    body: absent
+  # robocoin: from its ingest converter's embodiments()
+  robocoin_agibot_g1:
+    robot: AgiBot G1 (A2D), RoboCOIN
+    slots: [0, 1]
+    effector: parallel
+    stage: pretrain
+    ee_frame_fix: null
+    clause: The robot is an AgiBot G1 (A2D) with two arms and parallel grippers.
+    joints:
+      count: 7
+      names: [arm_joint_1, arm_joint_2, arm_joint_3, arm_joint_4, arm_joint_5, arm_joint_6, arm_joint_7]
+      unit: rad
+    hand: null
+    body:
+      base: still
+      torso: none
+      head: [head_yaw, head_pitch]
+  robocoin_cobot_magic:
+    robot: AgileX Cobot Magic (dual arm), RoboCOIN
+    slots: [0, 1]
+    effector: parallel
+    stage: pretrain
+    ee_frame_fix: null
+    clause: The robot is an AgileX Cobot Magic with two arms and parallel grippers.
+    joints:
+      count: 6
+      names: [arm_joint_1, arm_joint_2, arm_joint_3, arm_joint_4, arm_joint_5, arm_joint_6]
+      unit: rad
+    hand: null
+    body: {base: none, torso: none, head: none}
+  robocoin_galbot_g1:
+    robot: Galbot G1, RoboCOIN
+    slots: [0, 1]
+    effector: parallel
+    stage: pretrain
+    ee_frame_fix: null
+    clause: The robot is a Galbot G1 with two arms and parallel grippers.
+    joints:
+      count: 7
+      names: [arm_joint_1, arm_joint_2, arm_joint_3, arm_joint_4, arm_joint_5, arm_joint_6, arm_joint_7]
+      unit: rad
+    hand: null
+    body:
+      base: none
+      torso: [body_joint_1, body_joint_2, body_joint_3]
+      head: [head_joint_1, head_joint_2]
+  robocoin_r1_lite:
+    robot: Galaxea R1 Lite, six-joint arms, RoboCOIN
+    slots: [0, 1]
+    effector: parallel
+    stage: pretrain
+    ee_frame_fix: null
+    clause: The robot is a Galaxea R1 Lite with two six-joint arms and parallel grippers.
+    joints:
+      count: 6
+      names: [arm_joint_1, arm_joint_2, arm_joint_3, arm_joint_4, arm_joint_5, arm_joint_6]
+      unit: rad
+    hand: null
+    body: {base: none, torso: none, head: none}
+  robocoin_r1_lite_7dof:
+    robot: Galaxea R1 Lite, seven-joint arms, RoboCOIN
+    slots: [0, 1]
+    effector: parallel
+    stage: pretrain
+    ee_frame_fix: null
+    clause: The robot is a Galaxea R1 Lite with two seven-joint arms and parallel grippers.
+    joints:
+      count: 7
+      names: [arm_joint_1, arm_joint_2, arm_joint_3, arm_joint_4, arm_joint_5, arm_joint_6, arm_joint_7]
+      unit: rad
+    hand: null
+    body: {base: none, torso: none, head: none}
+  robocoin_realman_aidal:
+    robot: RealMan RMC-AIDA-L, RoboCOIN
+    slots: [0, 1]
+    effector: parallel
+    stage: pretrain
+    ee_frame_fix: null
+    clause: The robot is a RealMan RMC-AIDA-L with two arms and parallel grippers.
+    joints:
+      count: 7
+      names: [arm_joint_1, arm_joint_2, arm_joint_3, arm_joint_4, arm_joint_5, arm_joint_6, arm_joint_7]
+      unit: rad
+    hand: null
+    body: {base: none, torso: none, head: none}
+  # robocoin_hands: from its ingest converter's embodiments()
+  robocoin_airbot_mmk2:
+    robot: AIRBOT MMK2, RoboCOIN
+    slots: [0, 1]
+    effector: five_finger
+    stage: pretrain
+    ee_frame_fix: null
+    clause: The robot is an AIRBOT MMK2 with two arms and five-fingered hands.
+    joints:
+      count: 6
+      names: [arm_joint_1, arm_joint_2, arm_joint_3, arm_joint_4, arm_joint_5, arm_joint_6]
+      unit: rad
+    hand:
+      count: 12
+      order: [hand_joint_1, hand_joint_2, hand_joint_3, hand_joint_4, hand_joint_5, hand_joint_6, hand_joint_7,
+        hand_joint_8, hand_joint_9, hand_joint_10, hand_joint_11, hand_joint_12]
+      unit: rad
+      polarity_note: 0 = open (extended), about 1.9 rad closed; V01 and V08 store degrees, converted
+    body: {base: none, torso: none, head: none}
+  robocoin_unitree_g1:
+    robot: Unitree G1 humanoid with Dex3 hands, RoboCOIN
+    slots: [0, 1]
+    effector: three_finger
+    stage: pretrain
+    ee_frame_fix: null
+    clause: The robot is a Unitree G1 humanoid with two arms and dexterous hands.
+    joints:
+      count: 7
+      names: [arm_joint_1, arm_joint_2, arm_joint_3, arm_joint_4, arm_joint_5, arm_joint_6, arm_joint_7]
+      unit: rad
+    hand:
+      count: 7
+      order: [thumb_0, thumb_1, thumb_2, middle_0, middle_1, index_0, index_1]
+      unit: rad
+      polarity_note: 0 = open; the left hand closes toward negative, the right toward positive (native
+        signs, D16)
+    body: {base: none, torso: none, head: none}
+  robocoin_leju:
+    robot: Leju humanoid, RoboCOIN
+    slots: [0, 1]
+    effector: five_finger
+    stage: pretrain
+    ee_frame_fix: null
+    clause: The robot is a Leju humanoid with two arms and five-fingered hands.
+    joints:
+      count: 7
+      names: [arm_joint_1, arm_joint_2, arm_joint_3, arm_joint_4, arm_joint_5, arm_joint_6, arm_joint_7]
+      unit: rad
+    hand:
+      count: 2
+      order: [grip (hand_joint_1; joints 3-6 copy it), thumb (hand_joint_2)]
+      unit: rad
+      polarity_note: 0 = open, 1.7453 = closed
+    body:
+      base: imu_yaw
+      torso: none
+      head: [head_joint_1, head_joint_2]
+  # galaxea_owd: from its ingest converter's embodiments()
+  galaxea_r1lite:
+    robot: Galaxea R1 Lite
+    slots: [0, 1]
+    effector: parallel
+    stage: pretrain
+    ee_frame_fix: null
+    clause: The robot is a Galaxea R1 Lite with two arms and parallel grippers.
+    joints:
+      count: 6
+      names: [arm_joint_0, arm_joint_1, arm_joint_2, arm_joint_3, arm_joint_4, arm_joint_5]
+      unit: rad
+    hand: null
+    body:
+      base: command
+      torso: [torso_joint_0, torso_joint_1, torso_joint_2]
+      head: none
+  # robomind: from its ingest converter's embodiments()
+  robomind_franka:
+    robot: Franka Emika Panda (RoboMIND single-arm rigs)
+    slots: [0]
+    effector: parallel
+    stage: pretrain
+    ee_frame_fix: null
+    clause: The robot is a single Franka Emika Panda arm with a parallel gripper.
+    joints:
+      count: 7
+      names: [panda_joint1, panda_joint2, panda_joint3, panda_joint4, panda_joint5, panda_joint6, panda_joint7]
+      unit: rad
+    hand: null
+    body: absent
+  robomind_fr3_dual:
+    robot: Two Franka Research 3 arms (RoboMIND)
+    slots: [0, 1]
+    effector: parallel
+    stage: pretrain
+    ee_frame_fix: null
+    clause: The robot is a pair of Franka Research 3 arms with a parallel gripper on each arm.
+    joints:
+      count: 7
+      names: [fr3_joint1, fr3_joint2, fr3_joint3, fr3_joint4, fr3_joint5, fr3_joint6, fr3_joint7]
+      unit: rad
+    hand: null
+    body: absent
+  robomind_ur5e:
+    robot: Universal Robots UR5e (RoboMIND)
+    slots: [0]
+    effector: parallel
+    stage: pretrain
+    ee_frame_fix: null
+    clause: The robot is a Universal Robots UR5e with a parallel gripper.
+    joints:
+      count: 6
+      names: [shoulder_pan_joint, shoulder_lift_joint, elbow_joint, wrist_1_joint, wrist_2_joint, wrist_3_joint]
+      unit: rad
+    hand: null
+    body: absent
+  robomind_agilex_cobot_magic:
+    robot: AgileX Cobot Magic with two ARX5 arms (RoboMIND)
+    slots: [0, 1]
+    effector: parallel
+    stage: pretrain
+    ee_frame_fix: null
+    clause: The robot is an AgileX Cobot Magic with two ARX5 arms and a parallel gripper on each arm.
+    joints:
+      count: 6
+      names: [joint1, joint2, joint3, joint4, joint5, joint6]
+      unit: rad
+      note: joint names by position [unverified]
+    hand: null
+    body: {base: none, torso: none, head: none}
+  # robomind_tienkung: from its ingest converter's embodiments()
+  robomind_tienkung_gello:
+    robot: Tien Kung humanoid with gello-teleoperated gripping hands (RoboMIND)
+    slots: [0, 1]
+    effector: parallel
+    stage: pretrain
+    ee_frame_fix: null
+    clause: The robot is a Tien Kung humanoid with two arms and a gripping hand on each arm.
+    joints:
+      count: 7
+      names: [joint1, joint2, joint3, joint4, joint5, joint6, joint7]
+      unit: rad
+      note: joint names by position [unverified]
+    hand: null
+    body: absent
+  robomind_tienkung_xsens:
+    robot: Tien Kung humanoid with Inspire dexterous hands (RoboMIND)
+    slots: [0, 1]
+    effector: five_finger
+    stage: pretrain
+    ee_frame_fix: null
+    clause: The robot is a Tien Kung humanoid with two arms and Inspire five-fingered hands.
+    joints:
+      count: 7
+      names: [joint1, joint2, joint3, joint4, joint5, joint6, joint7]
+      unit: rad
+      note: joint names by position [unverified]
+    hand:
+      count: 6
+      order: [little, ring, middle, index, thumb_bend, thumb_rotation]
+      unit: unit
+      polarity_note: dimensionless [0.002, 0.998], high = open
+    body: absent
+  # ---- end of the new-data keys ----

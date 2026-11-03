@@ -1,0 +1,4 @@
+# @package model
+# Everything trains: backbone, expert, decoder and conditioning tokenizers.
+
+trainable: full_ft
