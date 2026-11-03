@@ -33,7 +33,7 @@
 
 ## 🤖 Model Zoo
 
-We release 2B and 9B NEO-series models across different training stages.
+We release 2B and 9B NEO-series models across different training stages, and the 2B NEO-VLA policy with its action pretraining dataset.
 
 <div style="overflow-x:auto;">
 <table border="1" cellspacing="0" cellpadding="6" style="white-space:nowrap; width:fit-content; display:inline-table;">
@@ -54,6 +54,31 @@ We release 2B and 9B NEO-series models across different training stages.
     <td>
       <a href="https://huggingface.co/collections/Paranioar/neo1-5">
         <img src="./VLMEvalKit_ov/assets/huggingface_logo.svg" width="16" height="16" /> NEO1_5 HF link
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td>NEO-VLA</td>
+    <td>
+      <a href="https://huggingface.co/weepiess2383/NEO-VLA">
+        <img src="./VLMEvalKit_ov/assets/huggingface_logo.svg" width="16" height="16" /> NEO-VLA HF link
+      </a>
+    </td>
+  </tr>
+</table>
+</div>
+
+<div style="overflow-x:auto;">
+<table border="1" cellspacing="0" cellpadding="6" style="white-space:nowrap; width:fit-content; display:inline-table;">
+  <tr>
+    <th align="center">Dataset Name</th>
+    <th align="center">Dataset Link</th>
+  </tr>
+  <tr>
+    <td>NEO-VLA-Action-Pretrain</td>
+    <td>
+      <a href="https://huggingface.co/datasets/weepiess2383/NEO-VLA-Action-Pretrain">
+        <img src="./VLMEvalKit_ov/assets/huggingface_logo.svg" width="16" height="16" /> NEO-VLA-Action-Pretrain HF link
       </a>
     </td>
   </tr>
