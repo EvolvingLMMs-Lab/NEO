@@ -15,6 +15,7 @@
 
 ## 📜 News   
 
+[2026/11] 🔥 The [project page](https://weichenfan.github.io/NEO-VLA-Page/), [weights](https://huggingface.co/weepiess2383/NEO-VLA), [dataset](https://huggingface.co/datasets/weepiess2383/NEO-VLA-Action-Pretrain), and [training code](https://github.com/EvolvingLMMs-Lab/NEO/blob/main/VLAKit/README.md) of **NEO-VLA** are released !    
 [2026/05] 🔥 The [paper](http://arxiv.org/abs/2605.28820), [weights](https://huggingface.co/collections/Paranioar/neo1-5), and [evaluation code](https://github.com/EvolvingLMMs-Lab/NEO/blob/main/VLMEvalKit_ov/README.md) of **NEO-ov** are released !    
 [2025/12] 💥 **NEO-ov** has been completed !   
 [2026/01] 🔥 The [training code](https://github.com/EvolvingLMMs-Lab/NEO/blob/main/VLMTrainKit/README.md) of NEO is released !        
@@ -27,6 +28,7 @@
 - [x] [Evaluation guide (NEO-ov)](VLMEvalKit_ov/README.md)
 - [x] [Evaluation guide (NEO)](VLMEvalKit/README.md)
 - [x] [Training guide](VLMTrainKit/README.md)
+- [x] [VLA training guide (NEO-VLA)](VLAKit/README.md)
 
 
 ## 🤖 Model Zoo
