@@ -65,8 +65,8 @@ Full demonstrations and experimental results are on the [project page](https://w
 Use Linux, Python 3.10 or later, and a CUDA-enabled PyTorch installation.
 
 ```bash
-git clone https://github.com/WeichenFan/NEO-VLA.git
-cd NEO-VLA
+git clone https://github.com/EvolvingLMMs-Lab/NEO.git
+cd NEO/VLAKit
 conda create -n neo-vla python=3.10 -y
 conda activate neo-vla
 # Install the PyTorch CUDA build appropriate for your system first.
