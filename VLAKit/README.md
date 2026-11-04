@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/assets/neo-vla.svg" alt="NEO-VLA — From Pixels to Actions" width="100%">
+  <img src="docs/assets/neo-vla.svg" alt="NEO-VLA — From Pixels to Actions – Towards Native Vision-Language-Action Policies" width="100%">
 </p>
 
-<h2 align="center">From Pixels to Actions:<br>Towards Native Vision-Language-Action Policies</h2>
+<h2 align="center">From Pixels to Actions –<br>Towards Native Vision-Language-Action Policies</h2>
 
 <p align="center">
   <a href="https://weichenfan.github.io/Weichen/">Weichen Fan</a><sup>1,*</sup>, <a href="https://paranioar.github.io/">Haiwen Diao</a><sup>1,*,♯</sup>, <a href="https://penghao-wu.github.io/">Penghao Wu</a><sup>1</sup>, <a href="https://sy-h.com/">Siyuan Hu</a><sup>1</sup>,<br>
@@ -136,7 +136,7 @@ when calibration checks fail.
 
 ```bibtex
 @misc{fan2026neovla,
-  title  = {From Pixels to Actions: Towards Native Vision-Language-Action Policies},
+  title  = {From Pixels to Actions -- Towards Native Vision-Language-Action Policies},
   author = {Fan, Weichen and Diao, Haiwen and Wu, Penghao and Hu, Siyuan and
             Huang, Ziqi and Liu, Tianqi and Sun, Mingze and Wang, Ziyi and
             Cai, Zhongang and Deng, Hanming and Wang, Quan and Yang, Lei and
