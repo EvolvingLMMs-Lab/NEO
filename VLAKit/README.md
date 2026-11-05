@@ -142,6 +142,14 @@ The client side needs only the Python standard library. The
 [deployment guide](docs/inference.md) covers the service config, the state and
 action records, history and a complete control loop.
 
+## Simulation benchmarks
+
+`neo_vla.bench` scores a step on LIBERO, LIBERO-plus, LIBERO-PRO and RoboTwin 2.0
+(clean and randomized) through the same service, with each simulator in its own
+environment. The released `stage_libero` and `stage_rtw` checkpoints carry an
+`eval.json` with their evaluation protocols. See the
+[benchmark guide](docs/benchmarks.md).
+
 ## Pretraining data
 
 <p align="center">

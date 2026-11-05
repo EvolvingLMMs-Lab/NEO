@@ -74,6 +74,7 @@ model's inputs:
 | `state_fields` | State name holding each arm's 29-value record |
 | `body_field` | Optional state name holding the 8-value body record |
 | `output_fields` | Descriptions of the returned columns, in output order |
+| `action_columns` | Optional model action columns to sample per arm, e.g. `[[7, 8, 9, 10, 11, 12, 13]]` for end-effector and gripper only |
 | `prompt_template` | Optional prompt with `{instruction}`; by default it is rendered from `config/prompt_template/policy.yaml` exactly as in training |
 
 Use the camera slots, frame and control rate of the post-training data. Camera

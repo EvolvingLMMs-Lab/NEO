@@ -54,6 +54,7 @@ class NeoBackend:
         ):
             raise ValueError("intrinsics_fields and extrinsics_fields must match camera_names")
         self.fields = tuple(ActionField.from_dict(x) for x in config["output_fields"])
+        self.dim_valid = self.columns_asked(config.get("action_columns"))
 
         device = config.get("device", "cpu")
         self.policy, report = load_policy(
@@ -100,6 +101,17 @@ class NeoBackend:
         if not math.isfinite(hz) or hz <= 0:
             raise ValueError("action_hz must be positive")
         return hz
+
+    def columns_asked(self, stated):
+        """Per-arm model action columns to sample, as the request's dim_valid; None for all."""
+        if stated is None:
+            return None
+        if not isinstance(stated, list) or len(stated) != len(self.arm_slots) or any(
+            not isinstance(one, list) or any(type(c) is not int or not 0 <= c < 26 for c in one)
+            for one in stated
+        ):
+            raise ValueError("action_columns must list model columns 0..25 for every arm")
+        return [[column in one for column in range(26)] for one in stated]
 
     def info(self):
         return ModelInfo(self.model_id, "NEO-VLA")
@@ -150,8 +162,9 @@ class NeoBackend:
             directory=self.directory,
             prompt=self.prompt(observation.instruction),
             frame_ref=self.frame_ref,
-            dim_valid=None,
+            dim_valid=self.dim_valid,
             body_dim_valid=None,
+            noise_seed=observation.seed,
         )
         with self.torch.inference_mode():
             prepared = self.predictor.observation(payload)

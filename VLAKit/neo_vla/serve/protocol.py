@@ -134,8 +134,13 @@ class Observation:
     images: dict[str, Image] = field(default_factory=dict)
     state: dict[str, StateField] = field(default_factory=dict)
     history: tuple[Observation, ...] = ()
+    # Seeds the policy's sampling noise; None leaves the draw to the model.
+    seed: int | None = None
 
     def __post_init__(self):
+        if self.seed is not None and (type(self.seed) is not int or not
+                                      0 <= self.seed < 2**63):
+            raise ValueError("Seed must be a nonnegative 63-bit integer")
         if not isinstance(self.request_id, str) or not re.fullmatch(
             r"[A-Za-z0-9_.-]{1,128}", self.request_id
         ):
@@ -161,7 +166,7 @@ class Observation:
             previous = observation.timestamp_s
 
     def to_dict(self):
-        return dict(
+        found = dict(
             schema_version=SCHEMA_VERSION,
             request_id=self.request_id,
             instruction=self.instruction,
@@ -170,6 +175,9 @@ class Observation:
             state={k: v.to_dict() for k, v in self.state.items()},
             history=[x.to_dict() for x in self.history],
         )
+        if self.seed is not None:
+            found["seed"] = self.seed
+        return found
 
     @classmethod
     def from_dict(cls, value, *, allow_history=True):
@@ -185,6 +193,7 @@ class Observation:
             {k: Image.from_dict(v) for k, v in value.get("images", {}).items()},
             {k: StateField.from_dict(v) for k, v in value.get("state", {}).items()},
             tuple(cls.from_dict(x, allow_history=False) for x in history),
+            value.get("seed"),
         )
 
 

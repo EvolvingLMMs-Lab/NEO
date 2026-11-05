@@ -1,0 +1,9 @@
+# Read by RoboTwin's eval_policy.py with --config. robotwin_run passes the
+# per-task values as --overrides, neo_settings among them.
+policy_name: neo_policy
+task_name: null
+task_config: null
+ckpt_setting: null
+seed: 0
+instruction_type: null
+neo_settings: null
