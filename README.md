@@ -4,6 +4,8 @@
   <img src="docs/NEO_architecture.jpg" width="80%">
 </p>
 
+- **2026/11**: [From Pixels to Actions -- Towards Native Vision-Language-Action Policies](https://arxiv.org/abs/2611.06918) (Arxiv 2026)
+
 - **2026/04**: [SenseNova-U1 with NEO-unify Architecture](https://arxiv.org/abs/2605.12500) (Technical Report 2026)
 
 - **2026/02**: [NEO-unify: Building Native Multimodal Unified Models End to End](https://huggingface.co/blog/sensenova/neo-unify) (HuggingFace Blog 2026)
