@@ -16,6 +16,7 @@
 </p>
 
 <p align="center">
+  <a href="https://huggingface.co/papers/2611.06918"><b>📄 Paper</b></a> ·
   <a href="https://weichenfan.github.io/NEO-VLA-Page/"><b>Project Page</b></a> ·
   <a href="https://huggingface.co/datasets/weepiess2383/NEO-VLA-Action-Pretrain"><b>🤗 Dataset</b></a> ·
   <a href="https://huggingface.co/weepiess2383/NEO-VLA"><b>🤗 Model</b></a>
@@ -143,6 +144,8 @@ when calibration checks fail.
             Lu, Lewei and Hong, Fangzhou and Chen, Zhaoxi and Lin, Dahua and
             Liu, Ziwei},
   year   = {2026},
+  eprint = {2611.06918},
+  archivePrefix = {arXiv},
   url    = {https://weichenfan.github.io/NEO-VLA-Page/}
 }
 ```
