@@ -116,6 +116,32 @@ The project page reports the experimental settings used for its results.
 The [training guide](docs/training.md) covers dataset layout, checkpoint
 initialization, distributed launch commands and recipe parameters.
 
+## Real-robot deployment
+
+`neo_vla.serve` turns a post-trained step into an HTTP policy service for a real
+robot. The robot's control loop sends camera frames, proprioception and the
+task instruction, and receives a chunk of actions in physical units (joint
+targets, end-effector increments, gripper), each column labelled with its unit
+and frame and `null` where the model does not control it. The service has no
+robot-specific code, so it plugs into any controller that can make an HTTP call:
+
+```bash
+export NEO_VLA_BACKBONE=/path/to/backbone
+neo-vla-serve --config robot.json --host 0.0.0.0 --port 8000
+```
+
+```python
+from neo_vla.serve import Client
+
+chunk = Client("http://gpu-host:8000").predict(observation)
+for row in chunk.actions[:16]:
+    robot.apply(row)
+```
+
+The client side needs only the Python standard library. The
+[deployment guide](docs/inference.md) covers the service config, the state and
+action records, history and a complete control loop.
+
 ## Pretraining data
 
 <p align="center">

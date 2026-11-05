@@ -30,6 +30,9 @@ dependencies = [
 prep = ["scipy", "opencv-python-headless"]
 dev = ["pytest", "ruff", "h5py"]
 
+[project.scripts]
+neo-vla-serve = "neo_vla.serve.server:main"
+
 [tool.setuptools.packages.find]
 include = ["neo_vla*"]
 
