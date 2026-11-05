@@ -161,6 +161,13 @@ If **NEO series** is helpful for your research, please consider **star** ⭐ and
   journal      = {arXiv preprint arXiv:2605.12500},
   year         = {2026}
 }
+
+@article{Fan2026NEOVLA,
+  title        = {From Pixels to Actions--Towards Native Vision-Language-Action Policies},
+  author       = {Fan, Weichen and Diao, Haiwen and Wu, Penghao and Hu, Siyuan and Huang, Ziqi and Liu, Tianqi and Sun, Mingze and Wang, Ziyi and Cai, Zhongang and Deng, Hanming and Wang, Quan and Yang, Lei and Lu, Lewei and Hong, Fangzhou and Chen, Zhaoxi and Lin, Dahua and Liu, Ziwei},
+  journal      = {arXiv preprint arXiv:2611.06918},
+  year         = {2026}
+}
 ```
 
 ## 📄 License 

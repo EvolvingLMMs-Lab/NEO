@@ -136,17 +136,15 @@ when calibration checks fail.
 ## Citation
 
 ```bibtex
-@misc{fan2026neovla,
-  title  = {From Pixels to Actions -- Towards Native Vision-Language-Action Policies},
-  author = {Fan, Weichen and Diao, Haiwen and Wu, Penghao and Hu, Siyuan and
-            Huang, Ziqi and Liu, Tianqi and Sun, Mingze and Wang, Ziyi and
-            Cai, Zhongang and Deng, Hanming and Wang, Quan and Yang, Lei and
-            Lu, Lewei and Hong, Fangzhou and Chen, Zhaoxi and Lin, Dahua and
-            Liu, Ziwei},
-  year   = {2026},
-  eprint = {2611.06918},
-  archivePrefix = {arXiv},
-  url    = {https://weichenfan.github.io/NEO-VLA-Page/}
+@article{Fan2026NEOVLA,
+  title   = {From Pixels to Actions--Towards Native Vision-Language-Action Policies},
+  author  = {Fan, Weichen and Diao, Haiwen and Wu, Penghao and Hu, Siyuan and
+             Huang, Ziqi and Liu, Tianqi and Sun, Mingze and Wang, Ziyi and
+             Cai, Zhongang and Deng, Hanming and Wang, Quan and Yang, Lei and
+             Lu, Lewei and Hong, Fangzhou and Chen, Zhaoxi and Lin, Dahua and
+             Liu, Ziwei},
+  journal = {arXiv preprint arXiv:2611.06918},
+  year    = {2026}
 }
 ```
 
