@@ -150,6 +150,17 @@ environment. The released `stage_libero` and `stage_rtw` checkpoints carry an
 `eval.json` with their evaluation protocols. See the
 [benchmark guide](docs/benchmarks.md).
 
+## Real-to-sim episodes
+
+`neo_vla.real2sim` builds a SAPIEN simulation of your own measured robot set-up (URDF, calibrated
+cameras, measured table and objects, a reviewed task contract), collects scripted demonstrations in
+bounded rollouts, verifies each one from its recorded physics and frames, and exports the passing
+episodes in a raw layout for post-training. Claude Code, running under your own login, can draft the
+scene and task specifications and controller plugins for you to review. The pipeline needs only the
+standard library; the simulator runs in its own environment. See the
+[real-to-sim guide](docs/real2sim.md) for the supported robots, objects and controllers, the inputs
+it requires and what its checks do and do not establish.
+
 ## Pretraining data
 
 <p align="center">

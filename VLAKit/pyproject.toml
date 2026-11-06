@@ -32,6 +32,7 @@ dev = ["pytest", "ruff", "h5py"]
 
 [project.scripts]
 neo-vla-serve = "neo_vla.serve.server:main"
+neo-vla-real2sim = "neo_vla.real2sim.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["neo_vla*"]
