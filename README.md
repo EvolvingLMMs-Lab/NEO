@@ -28,8 +28,7 @@
 [2026/11] 🔥 The [paper](https://huggingface.co/papers/2611.06918), [weights](https://huggingface.co/weepiess2383/NEO-VLA), [dataset](https://huggingface.co/datasets/weepiess2383/NEO-VLA-Action-Pretrain), [project page](https://weichenfan.github.io/NEO-VLA-Page/), and [training code](https://github.com/EvolvingLMMs-Lab/NEO/blob/main/VLAKit/README.md) of **NEO-VLA** are released !    
 [2026/09] 💥 **NEO-VLA** has been completed !   
 [2026/05] 🔥 The [paper](http://arxiv.org/abs/2605.28820), [weights](https://huggingface.co/collections/Paranioar/neo1-5), [training](https://github.com/EvolvingLMMs-Lab/NEO/blob/main/VLMTrainKit/README.md) and [evaluation code](https://github.com/EvolvingLMMs-Lab/NEO/blob/main/VLMEvalKit_ov/README.md) of **NEO-ov** are released !    
-[2025/12] 💥 **NEO-ov** has been completed !   
-[2026/01] 🔥 The [training code](https://github.com/EvolvingLMMs-Lab/NEO/blob/main/VLMTrainKit/README.md) of NEO is released !        
+[2025/12] 💥 **NEO-ov** has been completed !      
 [2025/10] 🔥 The [paper](https://arxiv.org/abs/2510.14979), [weights](https://huggingface.co/collections/Paranioar/neo1-0), [training](https://github.com/EvolvingLMMs-Lab/NEO/blob/main/VLMTrainKit/README.md) and [evaluation code](https://github.com/EvolvingLMMs-Lab/NEO/blob/main/VLMEvalKit/README.md) of **NEO** are released !     
 [2025/09] 💥 **NEO** has been completed !  
 
