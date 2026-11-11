@@ -1,0 +1,205 @@
+{
+ "corpus": "action_pretrain",
+ "totals": {
+  "directories": 2704,
+  "episodes": 2231583,
+  "rows": 928401030
+ },
+ "families": [
+  {
+   "family": "agibot",
+   "upstream_dataset": "AgiBot World",
+   "directories": 198,
+   "episodes": 158100,
+   "rows": 282649801,
+   "manifest_sources": {
+    "agibot": {
+     "directories": 198,
+     "episodes": 158100,
+     "rows": 282649801
+    }
+   },
+   "license": "pending review"
+  },
+  {
+   "family": "droid3cam",
+   "upstream_dataset": "DROID",
+   "directories": 41,
+   "episodes": 40081,
+   "rows": 10748496,
+   "manifest_sources": {
+    "droid3cam": {
+     "directories": 41,
+     "episodes": 40081,
+     "rows": 10748496
+    }
+   },
+   "license": "pending review"
+  },
+  {
+   "family": "oxe",
+   "upstream_dataset": "Open X-Embodiment (OXE)",
+   "directories": 120,
+   "episodes": 1210137,
+   "rows": 30275046,
+   "manifest_sources": {
+    "oxe": {
+     "directories": 120,
+     "episodes": 1210137,
+     "rows": 30275046
+    }
+   },
+   "license": "pending review"
+  },
+  {
+   "family": "rh20t",
+   "upstream_dataset": "RH20T",
+   "directories": 210,
+   "episodes": 32323,
+   "rows": 14557623,
+   "manifest_sources": {
+    "rh20t": {
+     "directories": 210,
+     "episodes": 32323,
+     "rows": 14557623
+    }
+   },
+   "license": "pending review"
+  },
+  {
+   "family": "interndata",
+   "upstream_dataset": "InternData-A1",
+   "directories": 1473,
+   "episodes": 585953,
+   "rows": 393804466,
+   "manifest_sources": {
+    "interndata_a1_franka_hand": {
+     "directories": 241,
+     "episodes": 47167,
+     "rows": 15292777
+    },
+    "interndata_a1_franka_robotiq": {
+     "directories": 16,
+     "episodes": 73086,
+     "rows": 56966128
+    },
+    "interndata_a1_genie1": {
+     "directories": 517,
+     "episodes": 50290,
+     "rows": 18753084
+    },
+    "interndata_a1_lift2": {
+     "directories": 376,
+     "episodes": 230891,
+     "rows": 158262790
+    },
+    "interndata_a1_split_aloha": {
+     "directories": 323,
+     "episodes": 184519,
+     "rows": 144529687
+    }
+   },
+   "license": "pending review"
+  },
+  {
+   "family": "robocoin",
+   "upstream_dataset": "RoboCOIN",
+   "directories": 417,
+   "episodes": 98797,
+   "rows": 74053114,
+   "manifest_sources": {
+    "robocoin": {
+     "directories": 220,
+     "episodes": 69852,
+     "rows": 55061479
+    },
+    "robocoin_hands": {
+     "directories": 197,
+     "episodes": 28945,
+     "rows": 18991635
+    }
+   },
+   "license": "pending review"
+  },
+  {
+   "family": "galaxea",
+   "upstream_dataset": "Galaxea Open-World Dataset",
+   "directories": 226,
+   "episodes": 20911,
+   "rows": 26730307,
+   "manifest_sources": {
+    "galaxea_owd": {
+     "directories": 226,
+     "episodes": 20911,
+     "rows": 26730307
+    }
+   },
+   "license": "pending review"
+  },
+  {
+   "family": "bimanual_yam",
+   "upstream_dataset": "BimanualYAM",
+   "directories": 1,
+   "episodes": 32184,
+   "rows": 75974251,
+   "manifest_sources": {
+    "bimanual_yam": {
+     "directories": 1,
+     "episodes": 32184,
+     "rows": 75974251
+    }
+   },
+   "license": "pending review"
+  },
+  {
+   "family": "robomind",
+   "upstream_dataset": "RoboMIND",
+   "directories": 18,
+   "episodes": 53097,
+   "rows": 19607926,
+   "manifest_sources": {
+    "robomind": {
+     "directories": 11,
+     "episodes": 37676,
+     "rows": 10080285
+    },
+    "robomind_tienkung": {
+     "directories": 7,
+     "episodes": 15421,
+     "rows": 9527641
+    }
+   },
+   "license": "pending review"
+  }
+ ],
+ "manifest": {
+  "path": "manifests/action_pretrain.json",
+  "corpus": "action_pretrain",
+  "schema_version": 3,
+  "directories": 2704
+ },
+ "normaliser": {
+  "path": "metadata/action_pretrain/embodiments.json",
+  "schema": "neo_vla_embodiments_v2",
+  "embodiment_keys": 37,
+  "datasets_records": 2704
+ },
+ "episode_filter": {
+  "drop_rules": [
+   "data_file_missing",
+   "episode_unreadable",
+   "rows_mismatch",
+   "frames_missing",
+   "episode_too_short",
+   "state_width_mismatch",
+   "action_width_mismatch",
+   "not_finite",
+   "quaternion_not_unit",
+   "action_equals_state"
+  ],
+  "reported_removed": 3,
+  "reported_checked": 2231586,
+  "note": "historical counts reported for the original build; kept episodes in the manifest: 2,231,583"
+ },
+ "counts_source": "the corpus manifest's own totals and per-source entries; metadata only, payload not scanned or copied, filtering not re-run"
+}

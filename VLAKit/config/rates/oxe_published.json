@@ -1,0 +1,28 @@
+{
+ "source": "https://docs.google.com/spreadsheets/d/1rPBD77tk60AEIGZrGSODwyyzs5FgCU9Uz3h-3_t2A9g",
+ "column": "Control Frequency",
+ "fetched": "2026-09-29",
+ "note": "The OXE overview sheet's control frequency per family, read as raw CSV rows on the fetch date (V6 section 2). Keyed by the dataset's directory name with the _shardNNofMM suffix stripped, the name the layout files key their OXE entries by. dobbe is 3.75 Hz: the on-disk action_unify_spec.json says 30 and is not used (11.1 cm/s at 3.75 Hz against 88.7 at 30). kuka (201.7 cm/s) and language_table (108.4 cm/s) fail the speed check Hz x median step; that is a warning recorded in the manifest's control_hz_evidence, not a reason for NA (D2-A). info.json fps is 10 in every family because the converter's --fps default wrote it; it is not a clock.",
+ "rates": {
+  "austin_buds_dataset_converted_externally_to_rlds": 20,
+  "austin_sailor_dataset_converted_externally_to_rlds": 20,
+  "austin_sirius_dataset_converted_externally_to_rlds": 20,
+  "bc_z": 10,
+  "berkeley_autolab_ur5": 5,
+  "berkeley_fanuc_manipulation": 10,
+  "bridge_orig": 5,
+  "cmu_stretch": 10,
+  "dlr_edan_shared_control_converted_externally_to_rlds": 5,
+  "dobbe": 3.75,
+  "fmb_dataset": 10,
+  "fractal20220817_data": 3,
+  "jaco_play": 10,
+  "kuka": 10,
+  "language_table": 10,
+  "nyu_franka_play_dataset_converted_externally_to_rlds": 3,
+  "stanford_hydra_dataset_converted_externally_to_rlds": 10,
+  "taco_play": 15,
+  "utaustin_mutex": 20,
+  "viola": 20
+ }
+}
