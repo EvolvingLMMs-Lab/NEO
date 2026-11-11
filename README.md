@@ -17,10 +17,10 @@
 - **2025/09**: [From Pixels to Words -- Towards Native Vision-Language Primitives at Scale](https://arxiv.org/abs/2510.14979) (ICLR 2026)
 
 
-> [!IMPORTANT]
-> **Attention Head dimension:**
-> - **2× LLM default:** NEO, NEO-ov, NEO-unify
-> - **1× LLM default:** SenseNova-U1, SenseNova-U1.5, NEO-VLA
+> **⚠️ Attention Head Dimension**
+> **2×** LLM default — NEO, NEO-ov, NEO-unify  
+> **1×** LLM default — SenseNova-U1, SenseNova-U1.5, NEO-VLA
+
 
 
 ## 📜 News   
